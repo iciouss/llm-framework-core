@@ -1,0 +1,88 @@
+site_name: llm-framework
+site_description: Minimal Python library for building LLM-powered agents with a low dependency footprint.
+site_url: https://iciouss.github.io/llm-framework/ # Uncomment and update
+# repo_url: https://github.com/iciouss/llm-framework # Adds GitHub icon to header
+repo_name: iciouss/llm-framework
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top # Added: Back-to-top button
+    - toc.integrate
+    - search.highlight
+    - content.code.copy # Added: Copy button for code blocks
+  palette: # Added: Light/Dark mode toggle
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+# Added: Markdown extensions for code formatting and callouts
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+
+plugins:
+  - search
+  - macros:
+      module_name: docs_macros
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [llm_framework]
+          options:
+            docstring_style: google
+            merge_init_into_class: true
+            show_source: false
+            show_root_heading: true
+            show_symbol_type_heading: true
+            members_order: source
+            show_signature_annotations: true
+            separate_signature: true
+            filters: ["!^_"]
+  - llmstxt:
+      full_output: llms-full.txt
+      autoclean: true
+      sections:
+        Home:
+          - index.md
+        Patterns:
+          - patterns.md
+        Getting Started:
+          - getting-started/*.md
+        API Reference:
+          - api/*.md
+        Environment Variables:
+          - environment-variables.md
+
+nav:
+  - Home: index.md
+  - Patterns: patterns.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - Environment Variables: environment-variables.md
+  - API Reference:
+      - Core: api/core.md
+      - Extensions: api/extensions.md
+      - Tools: api/tools.md
+      - Configuration: api/config.md
