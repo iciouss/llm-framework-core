@@ -12,14 +12,25 @@ requires-python = ">=3.13"
 dependencies = ["httpx>=0.28.1", "python-dotenv>=1.2.2"]
 
 [project.optional-dependencies]
-mcp = []
-rag = ["markitdown>=0.1.5", "semantic-text-splitter>=0.30.1"]
+# Library extras — extend the core library; install only what you need
+rag = ["pypdf>=6.12.2", "semantic-text-splitter>=0.30.1"]
 qdrant = ["qdrant-client>=1.17.1"]
 oidc = ["PyJWT[crypto]>=2.9.0"]
-web = ["fastapi>=0.115.0", "uvicorn>=0.34.0", "websockets>=13.0"]
-all = ["llm-framework[rag,qdrant,web,oidc]"]
+# Convenience groups
+all = ["llm-framework[rag,qdrant,oidc]"]
 
 [dependency-groups]
+# core  — base install only (httpx + python-dotenv); uv sync --group core
+core = []
+# extra — all library extensions; uv sync --group extra
+extra = ["llm-framework[all]"]
+# examples — library extensions + web; install before running any example
+examples = [
+    "fastapi>=0.136.1",
+    "llm-framework[all]",
+    "uvicorn>=0.46.0",
+    "websockets>=16.0",
+]
 docs = [
     "mkdocs>=1.6.1",
     "mkdocs-llmstxt>=0.5.0",
