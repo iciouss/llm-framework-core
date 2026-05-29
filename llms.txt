@@ -1,0 +1,29 @@
+# llm-framework
+
+> Minimal Python library for building LLM-powered agents with a low dependency footprint.
+
+## Home
+
+- [Home](https://iciouss.github.io/llm-framework/index.md)
+
+## Patterns
+
+- [Patterns](https://iciouss.github.io/llm-framework/patterns/index.md)
+
+## Getting Started
+
+- [Installation](https://iciouss.github.io/llm-framework/getting-started/installation/index.md)
+- [Quickstart](https://iciouss.github.io/llm-framework/getting-started/quickstart/index.md)
+
+## API Reference
+
+- [Configuration](https://iciouss.github.io/llm-framework/api/config/index.md)
+- [Core](https://iciouss.github.io/llm-framework/api/core/index.md)
+- [Extensions](https://iciouss.github.io/llm-framework/api/extensions/index.md)
+- [Plugins](https://iciouss.github.io/llm-framework/api/plugins/index.md)
+- [Tools](https://iciouss.github.io/llm-framework/api/tools/index.md)
+
+## Environment Variables
+
+- [Environment Variables](https://iciouss.github.io/llm-framework/environment-variables/index.md)
+
