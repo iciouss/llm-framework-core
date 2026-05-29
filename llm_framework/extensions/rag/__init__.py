@@ -4,13 +4,13 @@ import uuid
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from ._converter import to_markdown
+
 log = logging.getLogger(__name__)
 
 try:
-    from markitdown import MarkItDown as _MarkItDown
     from semantic_text_splitter import MarkdownSplitter as _MarkdownSplitter
 except ImportError:
-    _MarkItDown = None  # type: ignore[assignment]
     _MarkdownSplitter = None  # type: ignore[assignment]
 
 
@@ -65,12 +65,11 @@ class RAGStore:
         self.default_max_tokens = default_max_tokens
         self._embed_batch_size = embed_batch_size
         self._owns_client = _owns_client
-        if _MarkItDown is None or _MarkdownSplitter is None:
+        if _MarkdownSplitter is None:
             raise ImportError(
                 "RAGStore requires the [rag] extra: "
                 "uv pip install 'llm-framework[rag]'"
             )
-        self.converter = _MarkItDown()
 
     @classmethod
     def from_env(cls, storage_backend: BaseStorageBackend) -> "RAGStore":
@@ -116,13 +115,12 @@ class RAGStore:
             raise FileNotFoundError(f"Cannot find file: {file_path}")
 
         try:
-            conversion_result = self.converter.convert(str(path_obj))
-            markdown_text = conversion_result.text_content
+            text_content = to_markdown(path_obj)
         except Exception as exc:
-            log.warning("Failed to convert %s: %s", file_path, exc)
+            log.warning("Failed to extract text from %s: %s", file_path, exc)
             return 0
 
-        if not markdown_text or not markdown_text.strip():
+        if not text_content or not text_content.strip():
             return 0
 
         limit = max_tokens if max_tokens is not None else self.default_max_tokens
@@ -132,7 +130,7 @@ class RAGStore:
         splitter = _MarkdownSplitter.from_callback(
             lambda text: len(text) // 4, limit, overlap=overlap_limit
         )
-        chunks = splitter.chunks(markdown_text)
+        chunks = splitter.chunks(text_content)
 
         if not chunks:
             return 0
