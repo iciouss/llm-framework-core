@@ -19,11 +19,11 @@ Minimal Python library for building LLM-powered agents. Designed for a low depen
 git clone <repo> && cd llm-framework
 uv venv && source .venv/bin/activate
 uv pip install -e .               # core only: httpx, python-dotenv
-uv pip install -e ".[rag]"        # + markitdown, semantic-text-splitter
+uv pip install -e ".[rag]"        # + pypdf, semantic-text-splitter
 uv pip install -e ".[qdrant]"     # + qdrant-client
-uv pip install -e ".[web]"        # + fastapi, uvicorn, websockets
 uv pip install -e ".[oidc]"       # + PyJWT[crypto] for OIDC Authorization Code flow
-uv pip install -e ".[all]"        # everything
+uv pip install -e ".[all]"        # all library extras: rag, qdrant, oidc
+uv sync --group examples          # all library extras + web (run examples with this)
 ```
 
 Each extra is an explicit, auditable addition to your supply chain.
@@ -343,7 +343,7 @@ Runnable scripts in `examples/` — each is self-contained and introduces one co
 | `basics/07_approval.py` | HITL approval callback with `approval_tools` scoping |
 | `basics/08_orchestrator.py` | `Orchestrator` supervisor/delegate multi-agent pattern |
 | `basics/09_agent_as_tool.py` | Agent server (MCPServer) exposed as a single delegate tool |
-| `advanced/10_rag.py` | File ingestion → chunk → embed → vector search via `RAGStore` |
+| `advanced/10_rag.py` | File ingestion → chunk → embed → vector search via `RAGStore`; supports `.txt`, `.md`, `.pdf`, `.html`, `.docx`, `.ipynb`, `.xml`, `.csv`, `.json` |
 | `advanced/11_custom_mcp_server.py` | Writing and connecting to a custom MCPServer tool server |
 | `advanced/13_history_buffer.py` | `HistoryBuffer` for multi-turn conversations |
 | `advanced/14_cached_tool.py` | `@cached_tool` decorator for deterministic tool memoization |

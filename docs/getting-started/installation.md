@@ -20,12 +20,11 @@ uv pip install -e .
 Install optional capabilities only when needed:
 
 ```bash
-uv pip install -e ".[mcp]"      # MCP client support
-uv pip install -e ".[rag]"      # document conversion + semantic chunking
+uv pip install -e ".[rag]"      # pypdf + semantic-text-splitter
 uv pip install -e ".[qdrant]"   # Qdrant vector backend
-uv pip install -e ".[web]"      # FastAPI/uvicorn/websockets
 uv pip install -e ".[oidc]"     # OIDC provider support
-uv pip install -e ".[all]"      # everything
+uv pip install -e ".[all]"      # all library extras: rag, qdrant, oidc
+uv sync --group examples        # library extras + web (fastapi/uvicorn/websockets); run before any example
 ```
 
 This keeps dependencies explicit and aligned with the framework's low-footprint philosophy.
@@ -50,13 +49,10 @@ pip install "https://<PAT>@github.com/<owner>/llm-framework/releases/download/v0
 If you need specific extensions, you can install them using bracket notation at the end of the wheel URL. Pull only what you need to keep your dependency footprint small.
 
 ```bash
-# Install with Model Context Protocol (MCP) support
-pip install "https://<PAT>@github.com/<owner>/llm-framework/releases/download/v0.1.0/llm_framework-0.1.0-py3-none-any.whl[mcp]"
-
 # Install with Retrieval-Augmented Generation (RAG) support
 pip install "https://<PAT>@github.com/<owner>/llm-framework/releases/download/v0.1.0/llm_framework-0.1.0-py3-none-any.whl[rag]"
 
-# Install everything
+# Install all library extras (rag, qdrant, oidc)
 pip install "https://<PAT>@github.com/<owner>/llm-framework/releases/download/v0.1.0/llm_framework-0.1.0-py3-none-any.whl[all]"
 ```
 

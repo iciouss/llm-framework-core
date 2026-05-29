@@ -26,6 +26,7 @@ Read `AGENTS.md` for all coding rules, architecture conventions, and how-to patt
 - `Returns:` and `Raises:` are optional except on protocol interface methods where they describe the implementor contract.
 - Protocol methods must be fully implemented — never stub with `return None`.
 - Any pattern introduced in one file of a group (`tools/`, `mcp_servers/`) must be applied to all equivalent files in that group immediately.
+- **Adding a dependency:** always use `uv add` (or `uv add --optional <extra>`) — never write version pins by hand. Hand-written pins go stale and introduce security debt.
 
 ## 3. Document — update every location that is relevant to the change
 
@@ -44,20 +45,21 @@ After each change, run `grep -rn "OldName" docs/ AGENTS.md README.md` to confirm
 
 ## 4. Suggest git commits — do not run them
 
-Suggest the exact `git add` and `git commit` commands for the user to run after validating.
+Before writing any commit message, run `git diff HEAD` to read the actual changes. `git status --short` only lists file names — it is not enough. Bullets must describe WHAT changed as visible in the diff, and WHY it matters. Never write bullets that describe HOW something is implemented, reference session-specific context, or explain things only you and the user know from the current conversation.
+
+Suggest the exact `git add` and `git commit` commands for the user to run after validating. Always include both — never suggest only the commit message. Group ALL uncommitted changes into logical commits — never assume previous changes were already committed.
 
 Commit format (from `AGENTS.md`):
 
 ```
 type(scope): lowercase imperative subject under 72 chars
 
-- bullet explaining what/why
-- another bullet if needed
+- bullet on what changed and why (omit if subject is sufficient)
 ```
 
 Rules:
 
 - One logical change per commit — never bundle unrelated changes.
-- Body only when the subject alone is insufficient; bullet points only, never prose.
+- Body only when the subject alone is not enough — short bullet points on WHAT and WHY, not HOW.
 - Never `git push` without explicit user instruction.
 - Never amend already-pushed commits.

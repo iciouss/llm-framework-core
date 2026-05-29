@@ -14,12 +14,13 @@ Minimal Python library for building LLM-powered agents. Priority: low dependency
 ```sh
 uv venv && source .venv/bin/activate
 uv pip install -e .               # core only: httpx, python-dotenv
-uv pip install -e ".[mcp]"        # + mcp
-uv pip install -e ".[rag]"        # + markitdown, semantic-text-splitter
+uv pip install -e ".[rag]"        # + pypdf, semantic-text-splitter
 uv pip install -e ".[qdrant]"     # + qdrant-client
-uv pip install -e ".[web]"        # + fastapi, uvicorn, websockets
 uv pip install -e ".[oidc]"       # + PyJWT[crypto] for OIDC Authorization Code flow
-uv pip install -e ".[all]"        # all of the above
+uv pip install -e ".[all]"        # all library extras: rag, qdrant, oidc
+uv sync --group core              # same as base install; explicit marker
+uv sync --group extra             # all library extras
+uv sync --group examples          # library extras + web; install before running any example
 ```
 
 Requires Python 3.13+.
@@ -77,6 +78,7 @@ python tests/core/test_orchestrator.py
 python tests/core/test_structured_output.py
 python tests/core/test_history.py      # no LLM needed
 python tests/core/test_cached_tool.py  # no LLM needed
+python tests/core/test_rag_formats.py  # no LLM needed; tests all file format extractors
 python tests/core/test_memory.py       # spawns memory-server as subprocess automatically
 python tests/core/test_rag.py          # spawns knowledge-server; needs qdrant + embeddings endpoint
 ```
@@ -119,6 +121,7 @@ extensions/         — optional; install extras as needed
     server.py       — MCPServer + MCPContext: minimal MCP server (replaces third-party library)
   rag/
     __init__.py     — RAGStore, BaseStorageBackend protocol, backend_from_env factory
+    _converter.py   — file-to-markdown conversion for all supported formats
     vector_store/
       __init__.py
       qdrant.py     — Qdrant backend (in-memory, local, or remote)
@@ -157,7 +160,7 @@ For API usage examples and behavioral reference, see [`docs/patterns.md`](docs/p
 1. Create `extensions/my_feature.py`.
 2. If it has zero new deps, import it unconditionally in `extensions/__init__.py`.
 3. If it needs optional packages, wrap the import in a try/except in `extensions/__init__.py` with a stub that raises a clear `ImportError`.
-4. Add a new named extra to `pyproject.toml [project.optional-dependencies]` — one extra per feature, never bundle unrelated deps together. Add it to `all` as well.
+4. Add a new named extra to `pyproject.toml [project.optional-dependencies]` — one extra per feature, never bundle unrelated deps together. Library extras (extend the library API) go into `all`; extras that are only needed to run example scripts (e.g. `web`) do not. Use `uv add --optional <extra-name> <package>` to add the package — never write version pins by hand.
 
 ## How to Add an Agent Server (Agent-as-a-Tool)
 

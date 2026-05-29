@@ -88,7 +88,9 @@ class MyBackend(BaseStorageBackend):
 
 ## RAGStore
 
-`RAGStore` converts files to markdown, chunks them, embeds each chunk, and stores them for semantic search. Use `embed_batch_size` (default `64`) to control how many chunks are sent per embedding API call — lower it if your provider has per-request token limits.
+`RAGStore` extracts text from files, chunks them, embeds each chunk, and stores them for semantic search. Use `embed_batch_size` (default `64`) to control how many chunks are sent per embedding API call — lower it if your provider has per-request token limits.
+
+Supported file types: `.txt`, `.md`, `.rst`, `.csv`, `.json`, `.jsonl`, `.html`, `.htm`, `.xml`, `.ipynb`, `.docx`, `.pdf` (requires `[rag]` extra). Unknown extensions are attempted as plain text; empty result is returned on failure.
 
 `ingest_file()` is sandboxed to the home directory — paths outside `~` raise `PermissionError`.
 
