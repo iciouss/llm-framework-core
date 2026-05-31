@@ -19,6 +19,7 @@ Minimal Python library for building LLM-powered agents. Designed for a low depen
 git clone <repo> && cd llm-framework
 uv venv && source .venv/bin/activate
 uv pip install -e .               # core only: httpx, python-dotenv
+uv pip install -e ".[mcp]"        # + fastapi (HTTP transport for MCP servers)
 uv pip install -e ".[rag]"        # + pypdf, semantic-text-splitter, sqlite-vec
 uv pip install -e ".[qdrant]"     # + qdrant-client (Qdrant vector backend; set VECTOR_BACKEND=qdrant)
 uv pip install -e ".[oidc]"       # + PyJWT[crypto] for OIDC Authorization Code flow
@@ -28,6 +29,7 @@ uv pip install -e ".[std]"        # rag + oidc; recommended full install
 | Extra | Adds |
 |---|---|
 | *(none)* | `httpx`, `python-dotenv` |
+| `[mcp]` | `fastapi` — HTTP transport for MCP servers |
 | `[rag]` | `pypdf`, `semantic-text-splitter`, `sqlite-vec` |
 | `[oidc]` | `PyJWT[crypto]` |
 | `[std]` | `rag` + `oidc` — recommended full install |

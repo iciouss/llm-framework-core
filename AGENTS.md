@@ -14,6 +14,7 @@ Minimal Python library for building LLM-powered agents. Priority: low dependency
 ```sh
 uv venv && source .venv/bin/activate
 uv pip install -e .               # core only: httpx, python-dotenv
+uv pip install -e ".[mcp]"        # + fastapi (HTTP transport for MCP servers)
 uv pip install -e ".[rag]"        # + pypdf, semantic-text-splitter, sqlite-vec
 uv pip install -e ".[qdrant]"     # + qdrant-client (Qdrant vector backend; set VECTOR_BACKEND=qdrant)
 uv pip install -e ".[oidc]"       # + PyJWT[crypto] for OIDC Authorization Code flow
@@ -23,6 +24,7 @@ uv pip install -e ".[std]"        # rag + oidc; recommended full install
 | Extra | Adds |
 |---|---|
 | *(none)* | `httpx`, `python-dotenv` |
+| `[mcp]` | `fastapi` — HTTP transport for MCP servers |
 | `[rag]` | `pypdf`, `semantic-text-splitter`, `sqlite-vec` |
 | `[oidc]` | `PyJWT[crypto]` |
 | `[std]` | `rag` + `oidc` — recommended full install |
@@ -81,21 +83,24 @@ VAR_NAME=default_value
 # VAR_NAME=default_value
 ```
 
-**Run tests:** Tests are standalone integration scripts — not pytest. All tests read LLM config from `.env` via `LLMClient.from_env()` — no hardcoded credentials.
+**Run unit tests (no LLM required):**
 ```sh
-python tests/core/test_guardrails.py
-python tests/core/test_orchestrator.py
-python tests/core/test_structured_output.py
-python tests/core/test_history.py      # no LLM needed
-python tests/core/test_cached_tool.py  # no LLM needed
-python tests/core/test_rag_formats.py  # no LLM needed; tests all file format extractors
-python tests/core/test_memory.py       # spawns memory-server as subprocess automatically
-python tests/core/test_rag.py          # spawns knowledge-server; needs qdrant + embeddings endpoint
+uv run pytest tests/unit tests/test_packaging.py -v
 ```
+
+**Run integration tests (requires live LLM endpoint):**
+```sh
+uv run pytest tests/integration -v -m integration
+```
+Integration tests read LLM config from `.env` via `LLMClient.from_env()`. Set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` before running.
 
 ## Coding Rules
 
 - Single-line comments only. No block comments.
+- **Optional dependencies:** never use lazy imports (imports inside a function or method body). Always follow the three-step sentinel pattern:
+  1. Add `"package_name": "extra_name"` to `EXTRAS_MAP` in `llm_framework/_optional.py`.
+  2. Declare a top-level sentinel: `try: import pkg` / `except ImportError: pkg = None  # type: ignore[assignment]`.
+  3. Call `_require("pkg", pkg)` at instantiation or first use (not at import time). Import always succeeds; failure is deferred to use.
 - Docstrings on `@tool` and `@mcp.tool()` functions are required (used for schema auto-generation): one-line summary + `Args:` block for every parameter.
 - On public methods of services, managers, and protocol interfaces (`AuthProvider`, `PolicyBackend`, `BaseStorageBackend`): full docstring when the name alone does not convey side effects, return shape, or contract expectations; otherwise one line max.
 - On all other classes and functions: one line max. Skip entirely when the name is self-explanatory.
@@ -119,6 +124,7 @@ core/               — httpx only; always available
   orchestrator.py   — multi-agent supervisor/delegate pattern
 
 extensions/         — optional; install extras as needed
+  _optional.py      — centralised optional-dependency resolver; EXTRAS_MAP (package → extra) + require()
   memory.py         — stdlib JSON-backed key-value store (zero new deps)
   auth/
     __init__.py     — public re-exports
@@ -128,7 +134,7 @@ extensions/         — optional; install extras as needed
   mcp/
     __init__.py     — re-exports MCPClient, MCPManager, MCPServer, MCPContext
     client.py       — MCPClient: async MCP client over stdio or streamable-HTTP; MCPManager: aggregates multiple clients
-    server.py       — MCPServer + MCPContext: minimal MCP server (replaces third-party library)
+    server.py       — MCPServer + MCPContext: minimal MCP server (replaces third-party library); HTTP transport requires [mcp] extra
   rag/
     __init__.py     — RAGStore, BaseStorageBackend protocol, backend_from_env factory
     _converter.py   — file-to-markdown conversion for all supported formats
@@ -170,7 +176,7 @@ For API usage examples and behavioral reference, see [`docs/patterns.md`](docs/p
 
 1. Create `extensions/my_feature.py`.
 2. If it has zero new deps, import it unconditionally in `extensions/__init__.py`.
-3. If it needs optional packages, wrap the import in a try/except in `extensions/__init__.py` with a stub that raises a clear `ImportError`.
+3. If it needs optional packages, use the sentinel pattern (see **Optional Dependencies** in **Coding Rules** below). Add the package to `_optional.EXTRAS_MAP` and declare a top-level sentinel in the file. Never use lazy imports inside functions/methods.
 4. Add a new named extra to `pyproject.toml [project.optional-dependencies]` — one extra per feature, never bundle unrelated deps together. Library extras (extend the library API) go into `all`; extras that are only needed to run example scripts (e.g. `web`) do not. Use `uv add --optional <extra-name> <package>` to add the package — never write version pins by hand.
 
 ## How to Add an Agent Server (Agent-as-a-Tool)
@@ -332,7 +338,7 @@ Before considering work done, verify the following and fix anything that is not 
 
 1. **Coding rules** — single-line comments only; no block comments; no numbered comments; no emojis; comments explain *why* not *what*; names are provider/backend-agnostic; `@tool`/`@mcp.tool()` functions have full docstrings with `Args:`; public service/manager methods and protocol interfaces have full docstrings when non-obvious; all other functions one line max or omit; protocol methods fully implemented.
 2. **Consistency** — any pattern introduced in one file of a group (`tools/`, `mcp_servers/`) must be applied to all equivalent files in that group immediately (error surfacing, `__main__` CLI blocks, logging, `_MAX_CHARS` truncation, etc.).
-3. **`pyproject.toml`** — new optional dependencies get their own named extra; new servers get an entrypoint under `[project.scripts]`. Add `[qdrant]`-style extras for optional backends that require a separate install.
+3. **`pyproject.toml`** — new optional dependencies get their own named extra; new servers get an entrypoint under `[project.scripts]`. After adding an extra, run `uv run --with pytest pytest tests/test_packaging.py` — it asserts every extra in `pyproject.toml` is mentioned in `README.md`, `AGENTS.md`, `docs/getting-started/installation.md`, and `docs/api/extensions.md`. Fix any failures before committing.
 4. **`.env.example`** — every new env var is documented following the exact format: `# [Required|Optional] One-line description.` on the line above the variable; no section dividers; no extra commentary lines.
 5. **`AGENTS.md` Architecture table** — new files in `core/`, `extensions/`, `tools/`, `mcp_servers/`, or `examples/` are listed with a one-line description.
 6. **`README.md`** — new MCP servers documented under **MCP Tools Servers**; new agent servers under **Agent Servers**; new examples added to the examples table; new config vars in the **Configuration** section if user-facing.

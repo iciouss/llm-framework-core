@@ -2,11 +2,15 @@
 
 Extensions are optional modules that add capabilities beyond the core runtime while keeping dependencies explicit.
 Use extensions when you need integration features like MCP connectivity, RAG storage, policy-based auth, or output safeguards.
+Install the `[std]` extra (`uv pip install 'llm-framework[std]'`) for the recommended full-featured set (`[rag]` + `[oidc]`).
 
 ## MCP
 
 MCP extensions connect your agents to out-of-process tool servers over stdio or streamable HTTP.
 Use `MCPClient`/`MCPManager` to consume tools from any MCP server. Use `MCPServer`/`MCPContext` to build and expose your own.
+
+!!! note
+    `MCPClient` and `MCPServer` stdio transport have no extra dependencies. The MCP server HTTP transport requires the `[mcp]` extra: `uv pip install 'llm-framework[mcp]'`.
 
 ### ::: llm_framework.extensions.mcp.MCPClient
 
@@ -31,6 +35,7 @@ It is useful for user preferences, session facts, and other simple memory patter
 
 Auth primitives separate authentication (who the caller is) from authorization (which tools they can use).
 Use these types when your agent must enforce role-based or user-based access to tools.
+`OIDCAuthProvider` requires the `[oidc]` extra: `uv pip install 'llm-framework[oidc]'`.
 
 ### ::: llm_framework.extensions.auth.AuthContext
 
@@ -50,6 +55,7 @@ Use these types when your agent must enforce role-based or user-based access to 
 
 `RAGStore` handles ingest, chunking, embedding, and semantic retrieval workflows.
 Use it when your agent should ground answers in your own documents rather than only model priors.
+Requires the `[rag]` extra: `uv pip install 'llm-framework[rag]'`. For OIDC auth support, add `[oidc]`. Install both via `[std]`.
 
 ### ::: llm_framework.extensions.rag.RAGStore
 

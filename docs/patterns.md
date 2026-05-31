@@ -409,4 +409,51 @@ See `examples/chats/18.2_web_oidc_agent.py` for a complete FastAPI integration.
 
 ---
 
+## Optional Dependencies
+
+The framework uses a **sentinel pattern** — every optional dependency is imported at module top level and defaulted to `None` on failure. Actual failure is deferred to the point of use, not import time. This means:
+
+- `from llm_framework.extensions.rag import RAGStore` always succeeds, even without `[rag]` installed.
+- Instantiating `RAGStore(...)` raises a clear `ImportError` with an install hint if the required packages are missing.
+- Static analysis tools and import-time checks are never confused by buried conditional imports.
+
+**`llm_framework/_optional.py`** is the single source of truth mapping package names to extra names:
+
+```python
+from llm_framework._optional import EXTRAS_MAP
+# {"fastapi": "mcp", "jwt": "oidc", "semantic_text_splitter": "rag", ...}
+```
+
+**Pattern for adding a new optional dependency:**
+
+```python
+# 1. In _optional.py — add the mapping
+EXTRAS_MAP: dict[str, str] = {
+    ...,
+    "my_package": "my_extra",
+}
+
+# 2. In the file that uses it — top-level sentinel
+from llm_framework._optional import require as _require
+
+try:
+    import my_package
+except ImportError:
+    my_package = None  # type: ignore[assignment]
+
+# 3. At instantiation / first use — not at import time
+class MyFeature:
+    def __init__(self):
+        _require("my_package", my_package)
+        # my_package is guaranteed non-None from here on
+```
+
+The `require()` function raises:
+```
+ImportError: 'my_package' is required but not installed.
+Install it with: uv pip install 'llm-framework[my_extra]'
+```
+
+**Never use lazy imports** (imports inside a function or method body) for optional dependencies. They are invisible to grep and static analysis, and they produce confusing `NameError`s if the variable leaks out of scope.
+
 

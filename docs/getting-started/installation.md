@@ -20,6 +20,7 @@ uv pip install -e .
 Install optional capabilities only when needed:
 
 ```bash
+uv pip install -e ".[mcp]"      # fastapi (HTTP transport for MCP servers)
 uv pip install -e ".[rag]"      # pypdf, semantic-text-splitter, sqlite-vec (RAG with sqlite backend)
 uv pip install -e ".[qdrant]"   # qdrant-client (Qdrant vector backend; set VECTOR_BACKEND=qdrant)
 uv pip install -e ".[oidc]"     # PyJWT[crypto] (OIDC Authorization Code flow)
@@ -31,6 +32,7 @@ This keeps dependencies explicit and aligned with the framework's low-footprint 
 | Extra | Adds |
 |---|---|
 | *(none)* | `httpx`, `python-dotenv` |
+| `[mcp]` | `fastapi` — HTTP transport for MCP servers |
 | `[rag]` | `pypdf`, `semantic-text-splitter`, `sqlite-vec` |
 | `[oidc]` | `PyJWT[crypto]` |
 | `[std]` | `rag` + `oidc` — recommended full install |

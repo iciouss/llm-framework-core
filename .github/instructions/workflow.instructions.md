@@ -27,6 +27,7 @@ Read `AGENTS.md` for all coding rules, architecture conventions, and how-to patt
 - Protocol methods must be fully implemented — never stub with `return None`.
 - Any pattern introduced in one file of a group (`tools/`, `mcp_servers/`) must be applied to all equivalent files in that group immediately.
 - **Adding a dependency:** always use `uv add` (or `uv add --optional <extra>`) — never write version pins by hand. Hand-written pins go stale and introduce security debt.
+- **Optional dependencies:** never use lazy imports (inside a function or method). Always: (1) add the package to `EXTRAS_MAP` in `llm_framework/_optional.py`; (2) declare a top-level sentinel (`try: import pkg / except ImportError: pkg = None`); (3) call `_require("pkg", pkg)` at instantiation/first use. Import always succeeds; failure is deferred to use.
 
 ## 3. Document — update every location that is relevant to the change
 
