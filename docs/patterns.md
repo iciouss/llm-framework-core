@@ -94,6 +94,8 @@ Supported file types: `.txt`, `.md`, `.rst`, `.csv`, `.json`, `.jsonl`, `.html`,
 
 `ingest_file()` is sandboxed to the home directory — paths outside `~` raise `PermissionError`.
 
+**Vector backends:** `[rag]` ships `SqliteVecBackend` (default, no server required). For production scale use `QdrantBackend` from `[qdrant]`. Both implement `BaseStorageBackend` and are interchangeable. Use `backend_from_env()` to select at runtime via `VECTOR_BACKEND=sqlite|qdrant`.
+
 ```python
 store = RAGStore(
     llm_client=client,

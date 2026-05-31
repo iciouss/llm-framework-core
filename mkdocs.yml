@@ -86,3 +86,4 @@ nav:
       - Extensions: api/extensions.md
       - Tools: api/tools.md
       - Configuration: api/config.md
+      - Plugins: api/plugins.md

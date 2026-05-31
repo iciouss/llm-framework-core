@@ -20,14 +20,21 @@ uv pip install -e .
 Install optional capabilities only when needed:
 
 ```bash
-uv pip install -e ".[rag]"      # pypdf + semantic-text-splitter
-uv pip install -e ".[qdrant]"   # Qdrant vector backend
-uv pip install -e ".[oidc]"     # OIDC provider support
-uv pip install -e ".[all]"      # all library extras: rag, qdrant, oidc
-uv sync --group examples        # library extras + web (fastapi/uvicorn/websockets); run before any example
+uv pip install -e ".[rag]"      # pypdf, semantic-text-splitter, sqlite-vec (RAG with sqlite backend)
+uv pip install -e ".[qdrant]"   # qdrant-client (Qdrant vector backend; set VECTOR_BACKEND=qdrant)
+uv pip install -e ".[oidc]"     # PyJWT[crypto] (OIDC Authorization Code flow)
+uv pip install -e ".[std]"      # rag + oidc; recommended full install
 ```
 
 This keeps dependencies explicit and aligned with the framework's low-footprint philosophy.
+
+| Extra | Adds |
+|---|---|
+| *(none)* | `httpx`, `python-dotenv` |
+| `[rag]` | `pypdf`, `semantic-text-splitter`, `sqlite-vec` |
+| `[oidc]` | `PyJWT[crypto]` |
+| `[std]` | `rag` + `oidc` — recommended full install |
+| `[qdrant]` | `qdrant-client` — Qdrant vector backend; requires `VECTOR_BACKEND=qdrant`; install alongside `[rag]` |
 
 ## Release wheel install
 
@@ -52,8 +59,8 @@ If you need specific extensions, you can install them using bracket notation at 
 # Install with Retrieval-Augmented Generation (RAG) support
 pip install "https://<PAT>@github.com/<owner>/llm-framework/releases/download/v0.1.0/llm_framework-0.1.0-py3-none-any.whl[rag]"
 
-# Install all library extras (rag, qdrant, oidc)
-pip install "https://<PAT>@github.com/<owner>/llm-framework/releases/download/v0.1.0/llm_framework-0.1.0-py3-none-any.whl[all]"
+# Install the recommended full-featured library (rag + oidc)
+pip install "https://<PAT>@github.com/<owner>/llm-framework/releases/download/v0.1.0/llm_framework-0.1.0-py3-none-any.whl[std]"
 ```
 
 After installation, continue with the Quickstart to verify your environment and run a first agent.

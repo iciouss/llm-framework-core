@@ -58,7 +58,10 @@ Use it when your agent should ground answers in your own documents rather than o
 ## Vector Store
 
 Vector backends provide the storage/search engine behind RAG retrieval.
-`QdrantBackend` is the default implementation and supports local, in-memory, and remote modes.
+`SqliteVecBackend` is the default (no server required, file or in-memory). `QdrantBackend` is available for production scale via the `[qdrant]` extra.
+Use `backend_from_env()` to select at runtime via the `VECTOR_BACKEND` env var.
+
+### ::: llm_framework.extensions.rag.vector_store.sqlite.SqliteVecBackend
 
 ### ::: llm_framework.extensions.rag.vector_store.qdrant.QdrantBackend
 
