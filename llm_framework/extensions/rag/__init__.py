@@ -25,16 +25,38 @@ class BaseStorageBackend(Protocol):
     async def search(self, query_vector: list[float], limit: int) -> list[dict]: ...
 
 
-def backend_from_env() -> BaseStorageBackend:
-    "Construct the configured vector backend from environment variables."
-    name = os.getenv("VECTOR_BACKEND", "qdrant").lower()
+def backend_from_env(collection: str | None = None) -> BaseStorageBackend:
+    """Construct the configured vector backend from environment variables.
+
+    Args:
+        collection: Optional logical name for the vector namespace (collection or database).
+            When provided, backends use it to isolate data — sqlite appends it as
+            ``<SQLITE_PATH>/<collection>.db``; qdrant uses it as the collection name.
+            When omitted, each backend falls back to its own env-var default.
+    """
+    name = os.getenv("VECTOR_BACKEND", "sqlite").lower()
+
+    if name == "sqlite":
+        from llm_framework.extensions.rag.vector_store.sqlite import SqliteVecBackend
+
+        if collection:
+            base = os.getenv("SQLITE_PATH", "./data/sqlite")
+            path = str(Path(base) / f"{collection}.db")
+        else:
+            path = os.getenv("SQLITE_PATH", ":memory:")
+
+        return SqliteVecBackend(
+            path=path,
+            vector_size=int(os.getenv("VECTOR_SIZE", "768")),
+        )
 
     if name == "qdrant":
         from llm_framework.extensions.rag.vector_store.qdrant import QdrantBackend
 
         return QdrantBackend(
-            collection_name=os.getenv("QDRANT_COLLECTION", "knowledge_base"),
-            vector_size=int(os.getenv("QDRANT_VECTOR_SIZE", "768")),
+            collection_name=collection
+            or os.getenv("QDRANT_COLLECTION", "knowledge_base"),
+            vector_size=int(os.getenv("VECTOR_SIZE", "768")),
             path=os.getenv("QDRANT_PATH"),
             url=os.getenv("QDRANT_URL"),
         )
