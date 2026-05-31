@@ -31,7 +31,15 @@ source = "vcs"
 packages = ["llm_framework"]
 
 [dependency-groups]
-dev = ["pytest>=9.0.3", "pytest-asyncio>=1.4.0"]
+dev = ["pytest>=9.0.3", "pytest-asyncio>=1.4.0", "ruff>=0.15.15"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
