@@ -35,7 +35,11 @@ def _mcp_schema(func: Callable) -> dict:
 class MCPServer:
     "Minimal MCP server supporting stdio and streamable-HTTP transports."
 
-    def __init__(self, name: str, lifespan=None):
+    def __init__(
+        self,
+        name: str,
+        lifespan: Callable[["MCPServer"], asynccontextmanager] | None = None,
+    ):
         """
         Args:
             name: Server name reported in the initialize handshake.

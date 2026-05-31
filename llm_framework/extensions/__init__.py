@@ -45,5 +45,5 @@ except ImportError:
     class RAGStore:
         def __init__(self, *args, **kwargs):
             raise ImportError(
-                "RAGStore requires extras. Install with: pip install .[rag]"
+                "RAGStore requires the [rag] extra: pip install 'llm-framework[rag]'"
             )
