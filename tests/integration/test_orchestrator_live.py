@@ -1,8 +1,12 @@
 import asyncio
 import json
 
+import pytest
+
 from llm_framework.core import LLMClient, Agent, Orchestrator
 from llm_framework.extensions import MCPClient, MCPManager
+
+pytestmark = pytest.mark.integration
 
 # Requires: uv pip install -e ".[mcp,rag,qdrant]"
 # knowledge-server also needs a live embeddings endpoint (EMBED_MODEL or LLM_MODEL in .env)
@@ -68,5 +72,5 @@ async def main():
         print(result["answer"])
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+async def test_main():
+    await main()

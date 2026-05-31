@@ -1,8 +1,12 @@
 import asyncio
 import json
 
+import pytest
+
 from llm_framework.core import LLMClient, Agent
 from llm_framework.extensions import MCPClient, MCPManager
+
+pytestmark = pytest.mark.integration
 
 
 async def main():
@@ -32,4 +36,5 @@ async def main():
         print(result["answer"])
 
 
-asyncio.run(main())
+async def test_main():
+    await main()

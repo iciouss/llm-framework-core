@@ -13,6 +13,7 @@ dependencies = ["httpx>=0.28.1", "python-dotenv>=1.2.2"]
 
 [project.optional-dependencies]
 # Library extras — extend the core library; install only what you need
+mcp = ["fastapi>=0.115.0"]
 rag = ["pypdf>=6.12.2", "semantic-text-splitter>=0.30.1", "sqlite-vec>=0.1.9"]
 qdrant = ["qdrant-client>=1.17.1"]
 oidc = ["PyJWT[crypto]>=2.9.0"]
@@ -28,3 +29,13 @@ source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["llm_framework"]
+
+[dependency-groups]
+dev = ["pytest>=9.0.3", "pytest-asyncio>=1.4.0"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests/unit", "tests"]
+markers = [
+    "integration: requires a live LLM endpoint and env vars (LLM_BASE_URL, LLM_API_KEY, LLM_MODEL)",
+]

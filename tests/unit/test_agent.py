@@ -1,0 +1,308 @@
+import json
+import pprint
+
+import pytest
+
+from llm_framework.core import Agent
+from llm_framework.core.tools import tool
+
+
+@tool
+def echo(text: str) -> str:
+    "Return the input unchanged."
+    return text
+
+
+@tool
+def boom(reason: str) -> str:
+    """Always raises an exception.
+
+    Args:
+        reason: Why it should fail.
+    """
+    raise RuntimeError(reason)
+
+
+def _tool_call_response(name: str, args: dict, call_id: str = "tc1") -> dict:
+    "Build a raw LLM response that requests a tool call."
+    return {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": call_id,
+                            "function": {"name": name, "arguments": json.dumps(args)},
+                        }
+                    ],
+                }
+            }
+        ],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+    }
+
+
+def _final_response(text: str) -> dict:
+    return {
+        "choices": [
+            {"message": {"role": "assistant", "content": text, "tool_calls": None}}
+        ],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+    }
+
+
+# --- construction ---
+
+
+def test_registry_maps_name_to_callable():
+    agent = Agent(object(), tools=[echo])
+    print(f"registry: {list(agent.registry.keys())}")
+    assert agent.registry["echo"] is echo
+
+
+def test_schemas_built_from_tool_decorated_funcs():
+    agent = Agent(object(), tools=[echo])
+    names = [s["function"]["name"] for s in agent.schemas]
+    print(f"schemas names: {names}")
+    assert "echo" in names
+
+
+def test_schemas_excludes_plain_callables():
+    def plain(x: str) -> str:
+        return x
+
+    agent = Agent(object(), tools=[plain])
+    names = [s["function"]["name"] for s in agent.schemas]
+    assert "plain" not in names
+
+
+def test_default_system_prompt_set():
+    agent = Agent(object())
+    assert agent.system_prompt
+
+
+def test_custom_system_prompt_stored():
+    agent = Agent(object(), system_prompt="You are a pirate.")
+    assert agent.system_prompt == "You are a pirate."
+
+
+def test_approval_tools_stored_as_set():
+    agent = Agent(object(), approval_tools=["echo"])
+    assert agent.approval_tools == {"echo"}
+
+
+def test_approval_tools_none_means_all():
+    agent = Agent(object(), approval_tools=None)
+    assert agent.approval_tools is None
+
+
+# --- run: basic flow ---
+
+
+async def test_run_returns_answer(mock_llm):
+    client = mock_llm(["hello back"])
+    agent = Agent(client)
+    result = await agent.run("say hello")
+    print("agent.run result:")
+    pprint.pprint(result)
+    assert result["answer"] == "hello back"
+
+
+async def test_run_calls_tool_and_returns_final_answer(mock_llm):
+    client = mock_llm(
+        [
+            _tool_call_response("echo", {"text": "ping"}),
+            _final_response("pong"),
+        ]
+    )
+    agent = Agent(client, tools=[echo])
+    result = await agent.run("ping")
+    print(f"LLM call count: {len(client.calls)}  answer: {result['answer']!r}")
+    assert result["answer"] == "pong"
+
+
+# --- input/output guards ---
+
+
+async def test_input_guard_applied_before_llm(mock_llm):
+    captured = {}
+
+    def capture_guard(text: str) -> str:
+        captured["input"] = text
+        return text.upper()
+
+    client = mock_llm(["ok"])
+    agent = Agent(client, input_guards=[capture_guard])
+    await agent.run("hello")
+    # the guard must have transformed the prompt
+    assert captured["input"] == "hello"
+    sent_user_msg = client.calls[0]["messages"][-1]["content"]
+    print(
+        f"guard captured input: {captured['input']!r}  sent to LLM: {sent_user_msg!r}"
+    )
+    assert sent_user_msg == "HELLO"
+
+
+async def test_input_guard_raising_propagates(mock_llm):
+    def blocking_guard(text: str) -> str:
+        raise ValueError("blocked by guard")
+
+    client = mock_llm()
+    agent = Agent(client, input_guards=[blocking_guard])
+    with pytest.raises(ValueError, match="blocked by guard"):
+        await agent.run("some prompt")
+
+
+async def test_output_guard_applied_to_final_answer(mock_llm):
+    def redact_guard(text: str) -> str:
+        return text.replace("secret", "[REDACTED]")
+
+    client = mock_llm(["the secret is safe"])
+    agent = Agent(client, output_guards=[redact_guard])
+    result = await agent.run("what is the secret")
+    print(f"output after redact guard: {result['answer']!r}")
+    assert result["answer"] == "the [REDACTED] is safe"
+
+
+# --- approval ---
+
+
+async def test_approval_callback_called_before_tool(mock_llm):
+    calls = []
+
+    def approve(name, args):
+        calls.append((name, args))
+        return True
+
+    client = mock_llm(
+        [_tool_call_response("echo", {"text": "hi"}), _final_response("done")]
+    )
+    agent = Agent(client, tools=[echo], approval_callback=approve)
+    await agent.run("go")
+    print(f"approval calls: {calls}")
+    assert any(name == "echo" for name, _ in calls)
+
+
+async def test_approval_callback_false_skips_tool(mock_llm):
+    executed = []
+
+    @tool
+    def track(msg: str) -> str:
+        "Track a message."
+        executed.append(msg)
+        return "tracked"
+
+    def deny(name, args):
+        return False
+
+    client = mock_llm(
+        [_tool_call_response("track", {"msg": "hi"}), _final_response("done")]
+    )
+    agent = Agent(client, tools=[track], approval_callback=deny)
+    await agent.run("go")
+    print(f"executed (should be empty, approval denied): {executed}")
+    assert executed == []
+
+
+# --- max_steps ---
+
+
+async def test_max_steps_limits_iterations(mock_llm):
+    # always returns a tool call — forces the agent to loop until max_steps
+
+    class InfiniteToolCallClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+        async def chat_completions(self, messages, tools=None, **kwargs):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "t1",
+                                    "function": {
+                                        "name": "echo",
+                                        "arguments": json.dumps({"text": "loop"}),
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 5},
+            }
+
+    agent = Agent(InfiniteToolCallClient(), tools=[echo], max_steps=3)
+    result = await agent.run("run forever")
+    # agent must terminate and return something — not hang
+    print("result after max_steps=3:")
+    pprint.pprint(result)
+    assert "answer" in result
+
+
+# --- on_event ---
+
+
+async def test_on_event_receives_task_event(mock_llm):
+    events = []
+    client = mock_llm(["done"])
+    agent = Agent(client, on_event=events.append)
+    await agent.run("my task")
+    event_types = [e["event"] for e in events]
+    print(f"event types: {event_types}")
+    assert "task" in event_types
+
+
+async def test_on_event_receives_action_and_observation(mock_llm):
+    events = []
+    client = mock_llm(
+        [_tool_call_response("echo", {"text": "ping"}), _final_response("pong")]
+    )
+    agent = Agent(client, tools=[echo], on_event=events.append)
+    await agent.run("ping")
+    event_types = [e["event"] for e in events]
+    print(f"event types: {event_types}")
+    assert "action" in event_types
+    assert "observation" in event_types
+
+
+# --- tool error handling ---
+
+
+async def test_tool_exception_returned_as_observation(mock_llm):
+    events = []
+    client = mock_llm(
+        [
+            _tool_call_response("boom", {"reason": "test error"}),
+            _final_response("handled"),
+        ]
+    )
+    agent = Agent(client, tools=[boom], on_event=events.append)
+    result = await agent.run("do it")
+    # agent must survive the tool exception and complete
+    print(f"answer after tool exception: {result['answer']!r}")
+    print("tool_error events:")
+    pprint.pprint([e for e in events if e["event"] == "tool_error"])
+    assert result["answer"] == "handled"
+    assert any(e["event"] == "tool_error" for e in events)
+
+
+async def test_unknown_tool_returns_error_observation(mock_llm):
+    events = []
+    client = mock_llm([_tool_call_response("nonexistent", {}), _final_response("ok")])
+    agent = Agent(client, tools=[], on_event=events.append)
+    result = await agent.run("call unknown")
+    print(f"answer after unknown tool: {result['answer']!r}")
+    print("tool_error events:")
+    pprint.pprint([e for e in events if e["event"] == "tool_error"])
+    assert result["answer"] == "ok"
+    assert any(e["event"] == "tool_error" for e in events)

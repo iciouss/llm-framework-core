@@ -1,6 +1,11 @@
 import asyncio
 import json
+
+import pytest
+
 from llm_framework.core import LLMClient
+
+pytestmark = pytest.mark.integration
 
 
 async def main():
@@ -34,4 +39,5 @@ async def main():
         print(data)
 
 
-asyncio.run(main())
+async def test_main():
+    await main()

@@ -2,7 +2,11 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from llm_framework.core import LLMClient, Agent
+
+pytestmark = pytest.mark.integration
 from llm_framework.extensions import MCPClient, MCPManager
 
 # The knowledge server is spawned as a subprocess — no manual server startup needed.
@@ -46,5 +50,5 @@ async def main():
         print(search_result["answer"])
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+async def test_main():
+    await main()
