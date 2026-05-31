@@ -3,8 +3,8 @@ import dataclasses
 import inspect
 import json
 import sys
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import Callable
 
 from llm_framework._optional import require as _require
 from llm_framework.core.tools import build_schema

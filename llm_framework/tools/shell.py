@@ -1,5 +1,6 @@
 import asyncio
 import pathlib
+
 from llm_framework.core import tool
 
 _SAFE_ROOT = pathlib.Path.home()
@@ -27,7 +28,9 @@ def _safe_cwd(cwd: str | None) -> pathlib.Path:
     try:
         p.relative_to(_SAFE_ROOT)
     except ValueError:
-        raise PermissionError(f"cwd '{p}' is outside allowed root '{_SAFE_ROOT}'")
+        raise PermissionError(
+            f"cwd '{p}' is outside allowed root '{_SAFE_ROOT}'"
+        ) from None
     return p
 
 
@@ -41,7 +44,7 @@ def _safe_args(args: list[str]) -> None:
             except ValueError:
                 raise PermissionError(
                     f"Path argument '{p}' is outside allowed root '{_SAFE_ROOT}'"
-                )
+                ) from None
 
 
 @tool
@@ -75,10 +78,12 @@ async def run_command(
     )
     try:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         await proc.communicate()
-        raise TimeoutError(f"Command '{command}' timed out after {timeout:.0f}s")
+        raise TimeoutError(
+            f"Command '{command}' timed out after {timeout:.0f}s"
+        ) from None
     output = stdout.decode(errors="replace")
     return output[:_MAX_CHARS] + (
         "\n...[truncated]" if len(output) > _MAX_CHARS else ""

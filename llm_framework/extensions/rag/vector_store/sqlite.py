@@ -8,7 +8,7 @@ try:
     from sqlite_vec import serialize_float32
 except ImportError as _e:
     raise ImportError(
-        "SqliteVecBackend requires the [rag] extra: " "pip install 'llm-framework[rag]'"
+        "SqliteVecBackend requires the [rag] extra: pip install 'llm-framework[rag]'"
     ) from _e
 
 
@@ -61,7 +61,7 @@ class SqliteVecBackend:
     ):
         rows = [
             (id_, serialize_float32(vec), json.dumps(payload))
-            for id_, vec, payload in zip(ids, vectors, payloads)
+            for id_, vec, payload in zip(ids, vectors, payloads, strict=True)
         ]
         await asyncio.to_thread(self._upsert_sync, rows)
 

@@ -1,6 +1,6 @@
 try:
     from qdrant_client import AsyncQdrantClient
-    from qdrant_client.models import Distance, VectorParams, PointStruct
+    from qdrant_client.models import Distance, PointStruct, VectorParams
 except ImportError as _e:
     raise ImportError(
         "QdrantBackend requires the [qdrant] extra: "
@@ -63,7 +63,7 @@ class QdrantBackend:
         await self._ensure_collection()
         points = [
             PointStruct(id=point_id, vector=vector, payload=payload)
-            for point_id, vector, payload in zip(ids, vectors, payloads)
+            for point_id, vector, payload in zip(ids, vectors, payloads, strict=True)
         ]
         await self.db.upsert(collection_name=self.collection_name, points=points)
 

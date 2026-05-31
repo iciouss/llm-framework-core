@@ -147,10 +147,8 @@ class MCPBridge:
     async def _stdio_close(self):
         if self._reader_task:
             self._reader_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._reader_task
-            except asyncio.CancelledError:
-                pass
         if self._process:
             self._process.terminate()
             await self._process.wait()

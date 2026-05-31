@@ -2,7 +2,8 @@ from typing import Protocol, runtime_checkable
 
 from ._context import AuthContext
 from .backends import FilePolicyBackend, MemoryPolicyBackend
-from .providers import OIDCAuthProvider, StaticAuthProvider
+from .providers import OIDCAuthProvider as OIDCAuthProvider
+from .providers import StaticAuthProvider
 
 
 @runtime_checkable

@@ -1,13 +1,12 @@
-import asyncio
 import json
 from pathlib import Path
 
 import pytest
 
-from llm_framework.core import LLMClient, Agent
+from llm_framework.core import Agent, LLMClient
+from llm_framework.extensions import MCPClient, MCPManager
 
 pytestmark = pytest.mark.integration
-from llm_framework.extensions import MCPClient, MCPManager
 
 # The knowledge server is spawned as a subprocess — no manual server startup needed.
 # Requires: uv pip install -e ".[rag,qdrant,mcp]"

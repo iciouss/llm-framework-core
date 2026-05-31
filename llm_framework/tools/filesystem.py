@@ -1,4 +1,5 @@
 import pathlib
+
 from llm_framework.core import tool
 
 _SAFE_ROOT = pathlib.Path.home()
@@ -12,7 +13,9 @@ def _safe_path(path):
     try:
         p.relative_to(_SAFE_ROOT)
     except ValueError:
-        raise PermissionError(f"Path '{p}' is outside allowed root '{_SAFE_ROOT}'")
+        raise PermissionError(
+            f"Path '{p}' is outside allowed root '{_SAFE_ROOT}'"
+        ) from None
     return p
 
 

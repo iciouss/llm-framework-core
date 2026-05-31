@@ -8,6 +8,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from llm_framework._optional import require as _require
 from llm_framework.core.llm import LLMClient
+
 from ._converter import to_markdown
 
 log = logging.getLogger(__name__)
@@ -135,7 +136,7 @@ class RAGStore:
         except ValueError:
             raise PermissionError(
                 f"Path '{path_obj.resolve()}' is outside the home directory sandbox"
-            )
+            ) from None
 
         if not path_obj.exists():
             raise FileNotFoundError(f"Cannot find file: {file_path}")

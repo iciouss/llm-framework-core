@@ -1,12 +1,12 @@
 import argparse
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
 
 import uvicorn
 
-from llm_framework.extensions.rag import RAGStore, backend_from_env
 from llm_framework.extensions.mcp import MCPContext, MCPServer
+from llm_framework.extensions.rag import RAGStore, backend_from_env
 
 _MAX_CHARS = 8_000
 
@@ -52,7 +52,7 @@ async def ingest_file(path: str, ctx: MCPContext) -> str:
     except ValueError:
         raise PermissionError(
             f"Path '{resolved}' is outside the home directory sandbox"
-        )
+        ) from None
     rag: RAGStore = ctx.lifespan["rag"]
     count = await rag.ingest_file(str(resolved))
     return f"Ingested {count} chunks from '{resolved}'."
