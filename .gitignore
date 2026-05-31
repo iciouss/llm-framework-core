@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Lock file (library — consumers resolve their own tree)
+uv.lock
+
 # Environment variables
 .env
 
