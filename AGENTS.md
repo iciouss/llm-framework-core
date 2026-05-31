@@ -14,14 +14,19 @@ Minimal Python library for building LLM-powered agents. Priority: low dependency
 ```sh
 uv venv && source .venv/bin/activate
 uv pip install -e .               # core only: httpx, python-dotenv
-uv pip install -e ".[rag]"        # + pypdf, semantic-text-splitter
-uv pip install -e ".[qdrant]"     # + qdrant-client
+uv pip install -e ".[rag]"        # + pypdf, semantic-text-splitter, sqlite-vec
+uv pip install -e ".[qdrant]"     # + qdrant-client (Qdrant vector backend; set VECTOR_BACKEND=qdrant)
 uv pip install -e ".[oidc]"       # + PyJWT[crypto] for OIDC Authorization Code flow
-uv pip install -e ".[all]"        # all library extras: rag, qdrant, oidc
-uv sync --group core              # same as base install; explicit marker
-uv sync --group extra             # all library extras
-uv sync --group examples          # library extras + web; install before running any example
+uv pip install -e ".[std]"        # rag + oidc; recommended full install
 ```
+
+| Extra | Adds |
+|---|---|
+| *(none)* | `httpx`, `python-dotenv` |
+| `[rag]` | `pypdf`, `semantic-text-splitter`, `sqlite-vec` |
+| `[oidc]` | `PyJWT[crypto]` |
+| `[std]` | `rag` + `oidc` — recommended full install |
+| `[qdrant]` | `qdrant-client` — Qdrant vector backend; requires `VECTOR_BACKEND=qdrant`; install alongside `[rag]` |
 
 Requires Python 3.13+.
 
@@ -31,27 +36,32 @@ python examples/chats/16_web_agent.py                    # http://127.0.0.1:8080
 python examples/chats/16_web_agent.py --port 9090        # custom port
 python examples/chats/16_web_agent.py --no-mcp --open    # skip MCP servers, auto-open browser
 ```
-Requires `[web]` extra. MCP servers are optional — the agent starts without them if they fail.
+Install examples deps first: `cd examples && uv sync`. MCP servers are optional — the agent starts without them if they fail.
 
 **Run the web chat agent with password auth:**
 ```sh
 python examples/chats/18.1_web_auth_agent.py --open           # http://127.0.0.1:8080
 ```
-Requires `[web]` extra. Three demo users: admin / alice / bob (passwords printed at startup).
+Three demo users: admin / alice / bob (passwords printed at startup).
 
 **Run the web chat agent with OIDC SSO:**
 ```sh
-uv pip install -e ".[web,oidc]"
 python examples/chats/18.2_web_oidc_agent.py --open           # http://127.0.0.1:8080
 ```
-Requires `[web,oidc]` extras and `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_DISCOVERY_URL` in `.env`.
+Requires `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_DISCOVERY_URL` in `.env`.
+
+**Build and serve docs:**
+```sh
+uv run --project docs mkdocs serve   # http://127.0.0.1:8000
+uv run --project docs mkdocs build   # output → site/
+```
 
 **Run the knowledge MCP server:**
 ```sh
 uv run knowledge-server --http --port 8082   # streamable HTTP at /mcp
 uv run knowledge-server                      # stdio (for subprocess transport)
 ```
-Requires `LLM_BASE_URL`, `LLM_API_KEY`, `EMBED_MODEL` (or falls back to `LLM_MODEL`). Optional: `VECTOR_BACKEND`, `QDRANT_*` vars.
+Requires `LLM_BASE_URL`, `LLM_API_KEY`, `EMBED_MODEL` (or falls back to `LLM_MODEL`). Optional: `VECTOR_BACKEND`, `SQLITE_PATH`, `VECTOR_SIZE`, `QDRANT_*` vars.
 
 **Run the memory MCP server:**
 ```sh
@@ -124,7 +134,8 @@ extensions/         — optional; install extras as needed
     _converter.py   — file-to-markdown conversion for all supported formats
     vector_store/
       __init__.py
-      qdrant.py     — Qdrant backend (in-memory, local, or remote)
+      sqlite.py     — SqliteVecBackend: default, no server required, file or in-memory
+      qdrant.py     — QdrantBackend: production scale, Qdrant Cloud or self-hosted
   guardrails.py     — composable input/output guard functions (zero new deps)
 
 tools/              — @tool-decorated callables; import directly into any agent, run in-process
@@ -321,7 +332,7 @@ Before considering work done, verify the following and fix anything that is not 
 
 1. **Coding rules** — single-line comments only; no block comments; no numbered comments; no emojis; comments explain *why* not *what*; names are provider/backend-agnostic; `@tool`/`@mcp.tool()` functions have full docstrings with `Args:`; public service/manager methods and protocol interfaces have full docstrings when non-obvious; all other functions one line max or omit; protocol methods fully implemented.
 2. **Consistency** — any pattern introduced in one file of a group (`tools/`, `mcp_servers/`) must be applied to all equivalent files in that group immediately (error surfacing, `__main__` CLI blocks, logging, `_MAX_CHARS` truncation, etc.).
-3. **`pyproject.toml`** — new optional dependencies get their own named extra and are added to `[all]`; new servers get an entrypoint under `[project.scripts]`.
+3. **`pyproject.toml`** — new optional dependencies get their own named extra; new servers get an entrypoint under `[project.scripts]`. Add `[qdrant]`-style extras for optional backends that require a separate install.
 4. **`.env.example`** — every new env var is documented following the exact format: `# [Required|Optional] One-line description.` on the line above the variable; no section dividers; no extra commentary lines.
 5. **`AGENTS.md` Architecture table** — new files in `core/`, `extensions/`, `tools/`, `mcp_servers/`, or `examples/` are listed with a one-line description.
 6. **`README.md`** — new MCP servers documented under **MCP Tools Servers**; new agent servers under **Agent Servers**; new examples added to the examples table; new config vars in the **Configuration** section if user-facing.
@@ -358,5 +369,5 @@ Each documentation location has a distinct audience and update trigger. Update o
 Use conventional commits: `type(scope): description`
 
 - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
-- Subject line: lowercase, imperative mood, under 72 characters
+- Subject line: lowercase, imperative mood, under 72 characters, no specific file/function/symbol names
 - Body: only when the subject alone is not enough — short bullet points on WHAT and WHY, not HOW

@@ -19,12 +19,19 @@ Minimal Python library for building LLM-powered agents. Designed for a low depen
 git clone <repo> && cd llm-framework
 uv venv && source .venv/bin/activate
 uv pip install -e .               # core only: httpx, python-dotenv
-uv pip install -e ".[rag]"        # + pypdf, semantic-text-splitter
-uv pip install -e ".[qdrant]"     # + qdrant-client
+uv pip install -e ".[rag]"        # + pypdf, semantic-text-splitter, sqlite-vec
+uv pip install -e ".[qdrant]"     # + qdrant-client (Qdrant vector backend; set VECTOR_BACKEND=qdrant)
 uv pip install -e ".[oidc]"       # + PyJWT[crypto] for OIDC Authorization Code flow
-uv pip install -e ".[all]"        # all library extras: rag, qdrant, oidc
-uv sync --group examples          # all library extras + web (run examples with this)
+uv pip install -e ".[std]"        # rag + oidc; recommended full install
 ```
+
+| Extra | Adds |
+|---|---|
+| *(none)* | `httpx`, `python-dotenv` |
+| `[rag]` | `pypdf`, `semantic-text-splitter`, `sqlite-vec` |
+| `[oidc]` | `PyJWT[crypto]` |
+| `[std]` | `rag` + `oidc` — recommended full install |
+| `[qdrant]` | `qdrant-client` — Qdrant vector backend; requires `VECTOR_BACKEND=qdrant`; install alongside `[rag]` |
 
 Each extra is an explicit, auditable addition to your supply chain.
 
@@ -84,7 +91,7 @@ The framework reads configuration directly from environment variables via `LLMCl
 
 * `CA_BUNDLE_PATH` — path to custom TLS certs, or `False` to disable verification
 * `EMBED_MODEL` — falls back to `LLM_MODEL` if unset
-* `VECTOR_BACKEND`, `QDRANT_*` — for RAG/Knowledge extension
+* `VECTOR_BACKEND`, `SQLITE_PATH`, `VECTOR_SIZE`, `QDRANT_*` — for RAG/Knowledge extension (`[rag]` / `[qdrant]` extras)
 * `MEMORY_PATH` — for file-backed memory persistence
 * `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_DISCOVERY_URL` — OIDC Authorization Code flow (`[oidc]` extra)
 * `OIDC_ROLES_CLAIM` — JWT claim to read roles from (default: `roles`)
@@ -353,7 +360,11 @@ Runnable scripts in `examples/` — each is self-contained and introduces one co
 | `chats/18.1_web_auth_agent.py` | Web chat with username/password login (no extra deps beyond `[web]`) |
 | `chats/18.2_web_oidc_agent.py` | Web chat with OIDC SSO (Authorization Code flow); local testing via Dex |
 
-Run any example after copying `.env.example` to `.env`:
+Run any example after copying `.env.example` to `.env` and installing examples deps:
+
+```bash
+cd examples && uv sync
+```
 
 ```bash
 python examples/basics/02_basic_agent.py
@@ -381,7 +392,7 @@ Writes internal ReAct traces to `researcher.log` in the working directory.
 The `llm_framework/mcp_servers/` folder contains generic MCPServer instances (no external API dependency). Run them as separate processes when you need shared or persistent state across multiple agents or scripts.
 
 **Knowledge Server** (RAG: search_notes + ingest_file)
-Requires `LLM_BASE_URL`, `LLM_API_KEY`, `EMBED_MODEL`. Optional: `QDRANT_*`.
+Requires `LLM_BASE_URL`, `LLM_API_KEY`, `EMBED_MODEL`. Optional: `VECTOR_BACKEND`, `SQLITE_PATH`, `VECTOR_SIZE`, `QDRANT_*`.
 
 ```bash
 uv run knowledge-server                      # stdio mode

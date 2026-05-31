@@ -60,6 +60,7 @@ type(scope): lowercase imperative subject under 72 chars
 Rules:
 
 - One logical change per commit — never bundle unrelated changes.
+- Subject line must not contain specific file names, function names, class names, or symbol names — describe WHAT changed conceptually; put specifics in the body.
 - Body only when the subject alone is not enough — short bullet points on WHAT and WHY, not HOW.
-- Never `git push` without explicit user instruction.
+- Never commit or push without explicit user instruction.
 - Never amend already-pushed commits.
