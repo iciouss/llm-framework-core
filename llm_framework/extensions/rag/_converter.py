@@ -5,6 +5,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
+from llm_framework._optional import require as _require
+
 try:
     import pypdf
 except ImportError:
@@ -98,11 +100,7 @@ def to_markdown(path: Path) -> str:
             return ""
 
     if suffix == ".pdf":
-        if pypdf is None:
-            raise ImportError(
-                "PDF ingestion requires the [rag] extra: "
-                "uv pip install 'llm-framework[rag]'"
-            )
+        _require("pypdf", pypdf)
         reader = pypdf.PdfReader(path)
         return "\n\n".join(page.extract_text() or "" for page in reader.pages)
 

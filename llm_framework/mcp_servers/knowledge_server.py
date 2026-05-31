@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
 
+import uvicorn
+
 from llm_framework.extensions.rag import RAGStore, backend_from_env
 from llm_framework.extensions.mcp import MCPContext, MCPServer
 
@@ -66,8 +68,6 @@ def main():
     args = parser.parse_args()
 
     if args.http:
-        import uvicorn
-
         uvicorn.run(mcp.http_app(), host="0.0.0.0", port=args.port, log_level="warning")
     else:
         mcp.run()

@@ -2,6 +2,8 @@ import argparse
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+import uvicorn
+
 from llm_framework.extensions.memory import MemoryStore
 from llm_framework.extensions.mcp import MCPContext, MCPServer
 
@@ -73,8 +75,6 @@ def main():
     args = parser.parse_args()
 
     if args.http:
-        import uvicorn
-
         uvicorn.run(mcp.http_app(), host="0.0.0.0", port=args.port, log_level="warning")
     else:
         mcp.run()

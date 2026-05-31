@@ -6,7 +6,16 @@ import sys
 from contextlib import asynccontextmanager
 from typing import Callable
 
+from llm_framework._optional import require as _require
 from llm_framework.core.tools import build_schema
+
+try:
+    from fastapi import FastAPI, Request
+    from fastapi.responses import StreamingResponse
+except ImportError:
+    FastAPI = None  # type: ignore[assignment,misc]
+    Request = None  # type: ignore[assignment]
+    StreamingResponse = None  # type: ignore[assignment,misc]
 
 _PROTO_VERSION = "2025-03-26"
 
@@ -179,14 +188,8 @@ class MCPServer:
     # --- HTTP transport ---
 
     def http_app(self):
-        "Return a FastAPI ASGI app serving the MCP endpoint at POST /mcp. Requires [web] extra."
-        try:
-            from fastapi import FastAPI, Request
-            from fastapi.responses import StreamingResponse
-        except ImportError as e:
-            raise ImportError(
-                "HTTP mode requires the [web] extra: uv pip install 'llm-framework[web]'"
-            ) from e
+        "Return a FastAPI ASGI app serving the MCP endpoint at POST /mcp. Requires [mcp] extra."
+        _require("fastapi", FastAPI)
 
         server = self
 

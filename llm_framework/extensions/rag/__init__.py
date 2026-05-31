@@ -4,14 +4,28 @@ import uuid
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from dotenv import find_dotenv, load_dotenv
+
+from llm_framework._optional import require as _require
+from llm_framework.core.llm import LLMClient
 from ._converter import to_markdown
 
 log = logging.getLogger(__name__)
 
 try:
-    from semantic_text_splitter import MarkdownSplitter as _MarkdownSplitter
+    from semantic_text_splitter import MarkdownSplitter
 except ImportError:
-    _MarkdownSplitter = None  # type: ignore[assignment]
+    MarkdownSplitter = None  # type: ignore[assignment]
+
+try:
+    from llm_framework.extensions.rag.vector_store.sqlite import SqliteVecBackend
+except ImportError:
+    SqliteVecBackend = None  # type: ignore[assignment]
+
+try:
+    from llm_framework.extensions.rag.vector_store.qdrant import QdrantBackend
+except ImportError:
+    QdrantBackend = None  # type: ignore[assignment]
 
 
 @runtime_checkable
@@ -37,22 +51,19 @@ def backend_from_env(collection: str | None = None) -> BaseStorageBackend:
     name = os.getenv("VECTOR_BACKEND", "sqlite").lower()
 
     if name == "sqlite":
-        from llm_framework.extensions.rag.vector_store.sqlite import SqliteVecBackend
-
+        _require("sqlite_vec", SqliteVecBackend)
         if collection:
             base = os.getenv("SQLITE_PATH", "./data/sqlite")
             path = str(Path(base) / f"{collection}.db")
         else:
             path = os.getenv("SQLITE_PATH", ":memory:")
-
         return SqliteVecBackend(
             path=path,
             vector_size=int(os.getenv("VECTOR_SIZE", "768")),
         )
 
     if name == "qdrant":
-        from llm_framework.extensions.rag.vector_store.qdrant import QdrantBackend
-
+        _require("qdrant_client", QdrantBackend)
         return QdrantBackend(
             collection_name=collection
             or os.getenv("QDRANT_COLLECTION", "knowledge_base"),
@@ -87,18 +98,11 @@ class RAGStore:
         self.default_max_tokens = default_max_tokens
         self._embed_batch_size = embed_batch_size
         self._owns_client = _owns_client
-        if _MarkdownSplitter is None:
-            raise ImportError(
-                "RAGStore requires the [rag] extra: "
-                "uv pip install 'llm-framework[rag]'"
-            )
+        _require("semantic_text_splitter", MarkdownSplitter)
 
     @classmethod
     def from_env(cls, storage_backend: BaseStorageBackend) -> "RAGStore":
         "Construct a RAGStore from env vars; must be used as an async context manager to avoid leaking the HTTP client."
-        from llm_framework.core.llm import LLMClient
-        from dotenv import find_dotenv, load_dotenv
-
         load_dotenv(find_dotenv(usecwd=True), override=True)
         client = LLMClient(
             base_url=os.environ["LLM_BASE_URL"],
@@ -149,7 +153,7 @@ class RAGStore:
         overlap_limit = int(limit * 0.15)
 
         # char÷4 approximates tokens without a tokenizer
-        splitter = _MarkdownSplitter.from_callback(
+        splitter = MarkdownSplitter.from_callback(
             lambda text: len(text) // 4, limit, overlap=overlap_limit
         )
         chunks = splitter.chunks(text_content)

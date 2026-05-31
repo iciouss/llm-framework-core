@@ -6,9 +6,11 @@ from .auth import (
     AuthProvider,
     FilePolicyBackend,
     MemoryPolicyBackend,
+    OIDCAuthProvider,
     PolicyBackend,
     StaticAuthProvider,
 )
+from .rag import RAGStore, backend_from_env
 
 __all__ = [
     "MemoryStore",
@@ -25,25 +27,5 @@ __all__ = [
     "MCPContext",
     "MCPServer",
     "RAGStore",
+    "backend_from_env",
 ]
-
-try:
-    from .auth import OIDCAuthProvider
-except (ImportError, AttributeError):
-
-    class OIDCAuthProvider:
-        def __init__(self, *args, **kwargs):
-            raise ImportError(
-                "OIDCAuthProvider requires [oidc] extra: pip install .[oidc]"
-            )
-
-
-try:
-    from .rag import RAGStore
-except ImportError:
-
-    class RAGStore:
-        def __init__(self, *args, **kwargs):
-            raise ImportError(
-                "RAGStore requires the [rag] extra: pip install 'llm-framework[rag]'"
-            )

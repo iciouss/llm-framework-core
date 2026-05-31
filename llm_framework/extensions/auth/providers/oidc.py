@@ -9,17 +9,17 @@ from urllib.parse import urlencode
 
 import httpx
 
+from llm_framework._optional import require as _require
 from llm_framework.extensions.auth._context import AuthContext
 
 log = logging.getLogger(__name__)
 
 try:
-    import jwt as _jwt
-    from jwt import PyJWK as _PyJWK
-
-    _JWT_AVAILABLE = True
+    import jwt
+    from jwt import PyJWK
 except ImportError:
-    _JWT_AVAILABLE = False
+    jwt = None  # type: ignore[assignment]
+    PyJWK = None  # type: ignore[assignment]
 
 
 class OIDCAuthProvider:
@@ -35,11 +35,7 @@ class OIDCAuthProvider:
         scopes: list[str] | None = None,
         role_map: dict[str, set[str]] | None = None,
     ):
-        if not _JWT_AVAILABLE:
-            raise ImportError(
-                "OIDCAuthProvider requires PyJWT: "
-                "uv pip install 'llm-framework[oidc]'"
-            )
+        _require("jwt", jwt)
         self._client_id = client_id
         self._client_secret = client_secret
         self._discovery_url = discovery_url
@@ -134,7 +130,7 @@ class OIDCAuthProvider:
             return None
 
         try:
-            return _PyJWK.from_dict(key_data).key
+            return PyJWK.from_dict(key_data).key
         except Exception as exc:
             log.warning("key construction error for kid=%s: %s", kid, exc)
             return None
@@ -165,10 +161,10 @@ class OIDCAuthProvider:
             return None
 
         try:
-            header = _jwt.get_unverified_header(id_token)
+            header = jwt.get_unverified_header(id_token)
             kid = header.get("kid")
             alg = header.get("alg", "RS256")
-        except _jwt.DecodeError as exc:
+        except jwt.DecodeError as exc:
             log.warning("id_token header decode failed: %s", exc)
             return None
 
@@ -203,14 +199,14 @@ class OIDCAuthProvider:
             return None
 
         try:
-            claims: dict = _jwt.decode(
+            claims: dict = jwt.decode(
                 id_token,
                 signing_key,
                 algorithms=["RS256", "ES256", "RS384", "ES384"],
                 audience=self._client_id,
             )
             return claims
-        except _jwt.InvalidTokenError as exc:
+        except jwt.InvalidTokenError as exc:
             log.warning("id_token validation failed: %s", exc)
             return None
 

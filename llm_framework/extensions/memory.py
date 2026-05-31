@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import find_dotenv, load_dotenv
+
 
 class MemoryStore:
     "Key-value memory store backed by an in-memory dict or an optional JSON file."
@@ -26,8 +28,6 @@ class MemoryStore:
 
     @classmethod
     def from_env(cls) -> "MemoryStore":
-        from dotenv import find_dotenv, load_dotenv
-
         load_dotenv(find_dotenv(usecwd=True), override=True)
         return cls(path=os.getenv("MEMORY_PATH"))
 

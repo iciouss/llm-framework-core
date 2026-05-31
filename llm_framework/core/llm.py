@@ -4,6 +4,8 @@ import asyncio
 import logging
 from typing import Any
 
+from dotenv import find_dotenv, load_dotenv
+
 log = logging.getLogger(__name__)
 
 
@@ -41,8 +43,6 @@ class LLMClient:
     @classmethod
     def from_env(cls) -> "LLMClient":
         "Construct from env vars; reads LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, CA_BUNDLE_PATH."
-        from dotenv import find_dotenv, load_dotenv
-
         load_dotenv(find_dotenv(usecwd=True), override=True)
         ca_bundle = os.getenv("CA_BUNDLE_PATH") or None
         if ca_bundle and not os.path.isfile(ca_bundle):
