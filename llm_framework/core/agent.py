@@ -1,6 +1,7 @@
 import asyncio
 import json
-from typing import Callable, TypedDict
+from collections.abc import Callable
+from typing import TypedDict
 
 _MAX_CHARS = 20_000
 
@@ -268,7 +269,6 @@ class Agent:
         }
 
         for step in range(self.max_steps):
-
             # --- LLM request ---
 
             # filter schemas to only tools the caller is authorized to use;

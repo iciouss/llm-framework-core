@@ -26,8 +26,8 @@ Or spawn it as a subprocess without --http:
 import argparse
 import json
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from llm_framework.extensions.mcp import MCPContext, MCPServer
 

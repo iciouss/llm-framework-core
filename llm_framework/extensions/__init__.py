@@ -1,5 +1,3 @@
-from .memory import MemoryStore
-from .mcp import MCPClient, MCPManager, MCPContext, MCPServer
 from .auth import (
     AuthContext,
     AuthGate,
@@ -10,6 +8,8 @@ from .auth import (
     PolicyBackend,
     StaticAuthProvider,
 )
+from .mcp import MCPClient, MCPContext, MCPManager, MCPServer
+from .memory import MemoryStore
 from .rag import RAGStore, backend_from_env
 
 __all__ = [

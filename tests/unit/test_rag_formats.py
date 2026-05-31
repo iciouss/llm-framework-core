@@ -2,8 +2,6 @@ import io
 import json
 import zipfile
 
-import pytest
-
 from llm_framework.extensions.rag._converter import to_markdown
 
 

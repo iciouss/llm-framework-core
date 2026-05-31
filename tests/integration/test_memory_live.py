@@ -1,9 +1,8 @@
-import asyncio
 import json
 
 import pytest
 
-from llm_framework.core import LLMClient, Agent
+from llm_framework.core import Agent, LLMClient
 from llm_framework.extensions import MCPClient, MCPManager
 
 pytestmark = pytest.mark.integration

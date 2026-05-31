@@ -3,8 +3,8 @@ import pathlib
 import pprint
 import tempfile
 
-import pytest
-
+from llm_framework.core import Agent
+from llm_framework.core.tools import tool
 from llm_framework.extensions.auth import (
     AuthContext,
     AuthGate,
@@ -12,8 +12,6 @@ from llm_framework.extensions.auth import (
     MemoryPolicyBackend,
     StaticAuthProvider,
 )
-from llm_framework.core import Agent
-from llm_framework.core.tools import tool
 
 
 @tool

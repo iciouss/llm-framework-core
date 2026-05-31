@@ -1,10 +1,10 @@
 import argparse
 import json
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
-from llm_framework.core import LLMClient, Agent
+from llm_framework.core import Agent, LLMClient
 from llm_framework.extensions.mcp import MCPContext, MCPServer
 from llm_framework.tools.web_fetch import fetch_url
 

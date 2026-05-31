@@ -5,7 +5,7 @@ def define_env(env):
     @env.macro
     def env_table(filepath=".env.example"):
         try:
-            with open(filepath, "r") as f:
+            with open(filepath) as f:
                 lines = f.readlines()
         except FileNotFoundError:
             return "File not found."

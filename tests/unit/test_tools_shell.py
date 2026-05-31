@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -83,7 +83,7 @@ async def test_run_command_timeout_kills_process(monkeypatch):
 
     async def fake_wait_for(coro, timeout):
         coro.close()  # discard the unawaited coroutine to suppress ResourceWarning
-        raise asyncio.TimeoutError
+        raise TimeoutError
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
     monkeypatch.setattr(asyncio, "wait_for", fake_wait_for)

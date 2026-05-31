@@ -11,7 +11,7 @@ New here: Agent, event callback, event shapes.
 import asyncio
 import json
 
-from llm_framework.core import LLMClient, Agent
+from llm_framework.core import Agent, LLMClient
 
 
 # print_event prints every field of every event as raw JSON — useful here

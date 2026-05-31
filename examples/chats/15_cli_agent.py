@@ -15,21 +15,16 @@ import json
 import sys
 from pathlib import Path
 
-from llm_framework.core import LLMClient, Agent, HistoryBuffer
+from llm_framework.core import Agent, HistoryBuffer, LLMClient
 from llm_framework.extensions import MCPClient, MCPManager
-from llm_framework.extensions.guardrails import block_keywords, strip_pii, llm_guard
+from llm_framework.extensions.guardrails import block_keywords, llm_guard, strip_pii
 from llm_framework.tools import (
-    add_numbers,
-    multiply_numbers,
-    subtract_numbers,
-    divide_numbers,
+    fetch_url,
+    file_info,
     get_current_datetime,
+    list_directory,
     read_file,
     write_file,
-    list_directory,
-    file_info,
-    run_command,
-    fetch_url,
 )
 
 # --------------------------------------------------------------------------- #

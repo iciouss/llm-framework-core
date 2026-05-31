@@ -1,11 +1,11 @@
 import argparse
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 import uvicorn
 
-from llm_framework.extensions.memory import MemoryStore
 from llm_framework.extensions.mcp import MCPContext, MCPServer
+from llm_framework.extensions.memory import MemoryStore
 
 
 @asynccontextmanager

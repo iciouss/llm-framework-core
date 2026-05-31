@@ -23,14 +23,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import hmac
 import json
 import logging
 import secrets
 import webbrowser
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
 
 import uvicorn
 from fastapi import (
@@ -43,20 +44,20 @@ from fastapi import (
 )
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from llm_framework.core import LLMClient, Agent, HistoryBuffer
+from llm_framework.core import Agent, HistoryBuffer, LLMClient
 from llm_framework.extensions.auth import (
     AuthContext,
     AuthGate,
     MemoryPolicyBackend,
 )
-from llm_framework.extensions.guardrails import block_keywords, strip_pii, llm_guard
+from llm_framework.extensions.guardrails import block_keywords, llm_guard, strip_pii
 from llm_framework.tools import (
+    fetch_url,
+    file_info,
     get_current_datetime,
+    list_directory,
     read_file,
     write_file,
-    list_directory,
-    file_info,
-    fetch_url,
 )
 
 # --------------------------------------------------------------------------- #
@@ -236,10 +237,8 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     _approval_result: dict[str, bool] = {"approved": False}
 
     async def send(msg: dict) -> None:
-        try:
+        with contextlib.suppress(Exception):
             await ws.send_text(json.dumps(msg))
-        except Exception:
-            pass
 
     async def on_event(event: dict) -> None:
         await send({"type": "event", **event})

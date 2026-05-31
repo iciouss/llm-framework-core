@@ -1,5 +1,5 @@
-import re
 import json
+import re
 
 _POLICY_SCHEMA = {
     "type": "json_schema",

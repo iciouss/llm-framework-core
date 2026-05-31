@@ -1,9 +1,7 @@
-import asyncio
-
 import pytest
 
-from llm_framework.core import LLMClient, Agent
-from llm_framework.extensions.guardrails import block_keywords, strip_pii, llm_guard
+from llm_framework.core import Agent, LLMClient
+from llm_framework.extensions.guardrails import llm_guard, strip_pii
 from llm_framework.tools.calculator import add_numbers
 
 pytestmark = pytest.mark.integration

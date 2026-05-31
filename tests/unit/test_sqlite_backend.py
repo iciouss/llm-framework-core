@@ -1,4 +1,3 @@
-import math
 import pprint
 
 import pytest

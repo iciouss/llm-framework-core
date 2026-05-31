@@ -1,7 +1,5 @@
-from typing import Literal, Optional
 import pprint
-
-import pytest
+from typing import Literal
 
 from llm_framework.core.tools import build_schema, tool
 
@@ -69,7 +67,7 @@ def test_dict_param():
 
 
 def test_optional_unwrapped():
-    def f(value: Optional[str]): ...
+    def f(value: str | None): ...
 
     prop = _schema_for(f)["value"]
     print(f"Optional[str] param schema: {prop}")

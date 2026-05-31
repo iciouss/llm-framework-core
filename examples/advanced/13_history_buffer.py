@@ -9,9 +9,8 @@ New here: HistoryBuffer, prior_messages in agent.run().
 """
 
 import asyncio
-import json
 
-from llm_framework.core import LLMClient, Agent, HistoryBuffer
+from llm_framework.core import Agent, HistoryBuffer, LLMClient
 
 
 def show_event(e: dict):

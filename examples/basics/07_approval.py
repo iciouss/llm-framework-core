@@ -13,7 +13,7 @@ New here: approval_callback, approval_tools.
 import asyncio
 import json
 
-from llm_framework.core import LLMClient, Agent, tool
+from llm_framework.core import Agent, LLMClient, tool
 
 
 @tool

@@ -50,7 +50,7 @@ class OIDCAuthProvider:
         cls,
         redirect_uri: str,
         role_map: dict[str, set[str]] | None = None,
-    ) -> "OIDCAuthProvider":
+    ) -> OIDCAuthProvider:
         "Instantiate from OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_DISCOVERY_URL env vars."
         return cls(
             client_id=os.environ["OIDC_CLIENT_ID"],

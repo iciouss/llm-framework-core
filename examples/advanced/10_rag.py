@@ -16,7 +16,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from llm_framework.core import LLMClient, Agent
+from llm_framework.core import Agent, LLMClient
 from llm_framework.extensions import MCPClient, MCPManager
 
 KNOWLEDGE_SERVER = str(
