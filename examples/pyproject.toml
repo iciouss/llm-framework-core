@@ -1,0 +1,13 @@
+[project]
+name = "llm-framework-examples"
+version = "0.0.0"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.136.1",
+    "uvicorn>=0.46.0",
+    "websockets>=16.0",
+    "llm-framework[std]",
+]
+
+[tool.uv.sources]
+llm-framework = { path = ".." }
