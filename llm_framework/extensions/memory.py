@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 
-from dotenv import find_dotenv, load_dotenv
+from llm_framework._env import load_env
 
 
 class MemoryStore:
@@ -28,7 +28,7 @@ class MemoryStore:
 
     @classmethod
     def from_env(cls) -> "MemoryStore":
-        load_dotenv(find_dotenv(usecwd=True), override=True)
+        load_env()
         return cls(path=os.getenv("MEMORY_PATH"))
 
     # --- lifecycle ---

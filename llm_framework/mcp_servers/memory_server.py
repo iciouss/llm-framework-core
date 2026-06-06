@@ -72,10 +72,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--http", action="store_true")
     parser.add_argument("--port", type=int, default=8083)
+    parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
 
     if args.http:
-        uvicorn.run(mcp.http_app(), host="0.0.0.0", port=args.port, log_level="warning")
+        uvicorn.run(mcp.http_app(), host=args.host, port=args.port, log_level="warning")
     else:
         mcp.run()
 

@@ -5,8 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
-.pytest_cache/
-.ruff_cache/
+.*_cache
 
 # Virtual environments
 .venv
@@ -33,4 +32,15 @@ memory.json
 # Data folder
 data/
 
-.vscode/
+# AI agents
+.vscode
+.claude
+
+# Other files
+.understand-anything
+diagnostics
+*.diff
+.vite
+llm_framework.svg
+.coverage
+ignore

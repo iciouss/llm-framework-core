@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 import httpx
 
 from llm_framework._optional import require as _require
-from llm_framework.extensions.auth._context import AuthContext
+from ._context import AuthContext
 
 log = logging.getLogger(__name__)
 

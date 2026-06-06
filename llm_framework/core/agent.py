@@ -1,7 +1,14 @@
+from __future__ import annotations
+
 import asyncio
 import json
 from collections.abc import Callable
-from typing import TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
+
+from .protocols import AuthContextProtocol, AuthGateProtocol, LLMClientProtocol
+
+if TYPE_CHECKING:
+    from llm_framework.extensions.auth import AuthContext, AuthGate
 
 _MAX_CHARS = 20_000
 
@@ -22,6 +29,7 @@ class AgentEvent(TypedDict, total=False):
     prompt_tokens: int
     completion_tokens: int
     reasoning_tokens: int
+    delegated_to: str
 
 
 class Agent:
@@ -31,7 +39,7 @@ class Agent:
 
     def __init__(
         self,
-        client: object,
+        client: LLMClientProtocol,
         tools: list | None = None,
         max_steps: int = 10,
         max_tokens: int = 4096,
@@ -41,10 +49,10 @@ class Agent:
         input_guards: list | None = None,
         output_guards: list | None = None,
         on_event: "Callable[[AgentEvent], object] | None" = None,
-        approval_callback: object | None = None,
+        approval_callback: Callable[..., object] | None = None,
         approval_tools: list[str] | None = None,
-        auth_gate: object | None = None,
-    ):
+        auth_gate: AuthGateProtocol | None = None,
+    ) -> None:
         """
         Args:
             client: An `LLMClient` instance for sending chat completion requests.
@@ -88,7 +96,7 @@ class Agent:
 
     # --- event emission ---
 
-    async def _emit(self, event: dict):
+    async def _emit(self, event: AgentEvent) -> None:
         # supports both sync and async on_event callbacks
         if self.on_event:
             result = self.on_event(event)
@@ -97,7 +105,7 @@ class Agent:
 
     # --- tool validation and execution ---
 
-    def _validate_args(self, name: str, args: dict) -> str | None:
+    def _validate_args(self, name: str, args: dict[str, Any]) -> str | None:
         # skip validation for tools without a schema (e.g. MCP proxies before schema injection)
         func = self.registry.get(name)
         if not func or not hasattr(func, "schema"):
@@ -110,7 +118,7 @@ class Agent:
         return None
 
     async def _execute_tool(
-        self, name: str, args: dict, auth_context: object | None = None
+        self, name: str, args: dict[str, Any], auth_context: AuthContextProtocol | None = None
     ) -> str:
         # registry lookup
         if name not in self.registry:
@@ -147,7 +155,7 @@ class Agent:
             await self._emit(
                 {"event": "waiting_for_approval", "tool": name, "args": args}
             )
-            approved = self.approval_callback(name, args)
+            approved = self.approval_callback(name, args)  # type: ignore[misc]
             if asyncio.iscoroutine(approved):
                 approved = await approved
             if not approved:
@@ -174,8 +182,8 @@ class Agent:
             return f"Error executing {name}: {error}"
 
     async def _run_tool_call(
-        self, tc: dict, step: int, tok: dict, auth_context: object | None = None
-    ) -> dict:
+        self, tc: dict[str, Any], step: int, tok: AgentEvent, auth_context: AuthContextProtocol | None = None
+    ) -> dict[str, Any]:
         # unpack the LLM's tool call request
         fn_name = tc["function"]["name"]
         try:
@@ -215,15 +223,123 @@ class Agent:
             "content": observation,
         }
 
+    # --- ReAct loop helpers ---
+
+    def _apply_auth_filter(
+        self,
+        schemas: list[dict[str, object]],
+        context: AuthContextProtocol | None,
+    ) -> list[dict[str, object]]:
+        if self.auth_gate:
+            return self.auth_gate.filter_schemas(schemas, context)
+        return schemas
+
+    async def _apply_input_guards(self, prompt: str) -> str:
+        for guard in self.input_guards:
+            result = guard(prompt)
+            if asyncio.iscoroutine(result):
+                result = await result
+            prompt = result
+        return prompt
+
+    async def _apply_output_guards(self, content: str) -> str:
+        for guard in self.output_guards:
+            result = guard(content)
+            if asyncio.iscoroutine(result):
+                result = await result
+            content = result
+        return content
+
+    async def _run_loop(
+        self,
+        messages: list[dict[str, Any]],
+        auth_context: AuthContextProtocol | None,
+    ) -> dict[str, Any]:
+        tok: AgentEvent = {
+            "context_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "reasoning_tokens": 0,
+        }
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_reasoning_tokens = 0
+
+        for step in range(self.max_steps):
+            visible_schemas = self._apply_auth_filter(self.schemas, auth_context)
+
+            response = await self.client.chat_completions(
+                messages,
+                tools=visible_schemas or None,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+                max_retries=self.max_retries,
+            )
+
+            usage = response.get("usage", {})
+            context_tokens = usage.get("prompt_tokens", 0)
+            total_prompt_tokens += context_tokens
+            total_completion_tokens += usage.get("completion_tokens", 0)
+            total_reasoning_tokens += usage.get("completion_tokens_details", {}).get(
+                "reasoning_tokens", 0
+            )
+            tok = AgentEvent(
+                context_tokens=context_tokens,
+                prompt_tokens=total_prompt_tokens,
+                completion_tokens=total_completion_tokens,
+                reasoning_tokens=total_reasoning_tokens,
+            )
+
+            msg: dict[str, Any] = response["choices"][0]["message"]
+            history_msg = {
+                k: v
+                for k, v in msg.items()
+                if k not in ("reasoning_content", "thought", "reasoning")
+            }
+            messages.append(history_msg)
+
+            reasoning = (
+                msg.get("reasoning_content")
+                or msg.get("thought")
+                or msg.get("reasoning")
+            )
+            if reasoning:
+                await self._emit(
+                    {"event": "thought", "kind": "reasoning", "content": reasoning.strip(), **tok}  # type: ignore[misc]
+                )
+
+            content = msg.get("content") or ""
+            tool_calls = msg.get("tool_calls")
+
+            if content and tool_calls:
+                await self._emit(
+                    {"event": "thought", "kind": "plan", "content": content.strip(), **tok}  # type: ignore[misc]
+                )
+
+            if not tool_calls:
+                return {"answer": content, "messages": messages, **tok}
+
+            tool_messages: list[dict[str, Any]] = list(await asyncio.gather(
+                *[self._run_tool_call(tc, step, tok, auth_context) for tc in tool_calls]
+            ))
+            messages.extend(tool_messages)
+
+        await self._emit({"event": "error", "reason": "max_steps_reached", **tok})
+        return {
+            "answer": "(reached maximum steps without a final answer)",
+            "messages": messages,
+            **tok,
+        }
+
     # --- ReAct loop ---
 
     async def run(
         self,
         prompt: str,
         system_prompt: str | None = None,
-        prior_messages: list[dict] | None = None,
-        auth_context: object | None = None,
-    ) -> dict:
+        prior_messages: list[dict[str, Any]] | None = None,
+        auth_context: AuthContextProtocol | None = None,
+    ) -> dict[str, Any]:
         """Run the agent on a prompt and return the final answer with cumulative token usage.
 
         Args:
@@ -236,17 +352,10 @@ class Agent:
             Dict with keys: `answer` (str), `messages` (list), `context_tokens` (current window size),
             `prompt_tokens` (cumulative billing total), `completion_tokens`, `reasoning_tokens`.
         """
-
-        # input guards run first — they can transform or block the prompt entirely
         system_prompt = system_prompt or self.system_prompt
-        for guard in self.input_guards:
-            result = guard(prompt)
-            if asyncio.iscoroutine(result):
-                result = await result
-            prompt = result
+        prompt = await self._apply_input_guards(prompt)
 
-        # build the initial message list: system + conversation history + new user turn
-        messages = (
+        messages: list[dict[str, Any]] = (
             [{"role": "system", "content": system_prompt}]
             + (prior_messages or [])
             + [{"role": "user", "content": prompt}]
@@ -254,119 +363,17 @@ class Agent:
 
         await self._emit({"event": "task", "prompt": prompt})
 
-        # accumulators: prompt/completion are cumulative billing totals across all steps;
-        # context_tokens reflects only the most recent request's prompt size
-        total_prompt_tokens = 0
-        total_completion_tokens = 0
-        total_reasoning_tokens = 0
-        context_tokens = 0
-        # pre-initialized so the post-loop error path always has a valid tok to spread
-        tok = {
-            "context_tokens": 0,
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "reasoning_tokens": 0,
+        result = await self._run_loop(messages, auth_context)
+
+        answer = str(result.get("answer", ""))
+        answer = await self._apply_output_guards(answer)
+        result["answer"] = answer
+
+        tok_for_emit: AgentEvent = {
+            "context_tokens": int(result.get("context_tokens", 0)),
+            "prompt_tokens": int(result.get("prompt_tokens", 0)),
+            "completion_tokens": int(result.get("completion_tokens", 0)),
+            "reasoning_tokens": int(result.get("reasoning_tokens", 0)),
         }
-
-        for step in range(self.max_steps):
-            # --- LLM request ---
-
-            # filter schemas to only tools the caller is authorized to use;
-            # unauthorized tools are hidden from the model entirely (not just blocked at execution)
-            visible_schemas = (
-                self.auth_gate.filter_schemas(self.schemas, auth_context)
-                if self.auth_gate
-                else self.schemas
-            )
-
-            response = await self.client.chat_completions(
-                messages,
-                tools=visible_schemas or None,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-                max_retries=self.max_retries,
-            )
-
-            # token accounting: context_tokens = this step's window size, not running total
-            usage = response.get("usage", {})
-            context_tokens = usage.get("prompt_tokens", 0)
-            total_prompt_tokens += context_tokens
-            total_completion_tokens += usage.get("completion_tokens", 0)
-            total_reasoning_tokens += usage.get("completion_tokens_details", {}).get(
-                "reasoning_tokens", 0
-            )
-            # tok is spread into every emitted event and the final return value
-            tok = {
-                "context_tokens": context_tokens,
-                "prompt_tokens": total_prompt_tokens,
-                "completion_tokens": total_completion_tokens,
-                "reasoning_tokens": total_reasoning_tokens,
-            }
-
-            # --- message processing ---
-
-            msg = response["choices"][0]["message"]
-            # strip thinking fields before appending — re-sending them inflates future prompts
-            history_msg = {
-                k: v
-                for k, v in msg.items()
-                if k not in ("reasoning_content", "thought", "reasoning")
-            }
-            messages.append(history_msg)
-
-            # some models return a dedicated reasoning field alongside the response
-            reasoning = (
-                msg.get("reasoning_content")
-                or msg.get("thought")
-                or msg.get("reasoning")
-            )
-            if reasoning:
-                await self._emit(
-                    {
-                        "event": "thought",
-                        "kind": "reasoning",
-                        "content": reasoning.strip(),
-                        **tok,
-                    }
-                )
-
-            content = msg.get("content") or ""
-            tool_calls = msg.get("tool_calls")
-
-            # content alongside tool_calls means the model is narrating its intent ("plan")
-            if content and tool_calls:
-                await self._emit(
-                    {
-                        "event": "thought",
-                        "kind": "plan",
-                        "content": content.strip(),
-                        **tok,
-                    }
-                )
-
-            # --- terminal: no tool calls means the model produced a final answer ---
-
-            if not tool_calls:
-                # output guards run last — they can redact or transform the answer
-                for guard in self.output_guards:
-                    result = guard(content)
-                    if asyncio.iscoroutine(result):
-                        result = await result
-                    content = result
-                await self._emit({"event": "answer", "content": content, **tok})
-                return {"answer": content, "messages": messages, **tok}
-
-            # --- tool execution (parallel across all tool calls in this step) ---
-
-            tool_messages = await asyncio.gather(
-                *[self._run_tool_call(tc, step, tok, auth_context) for tc in tool_calls]
-            )
-            messages.extend(tool_messages)
-
-        # exhausted max_steps without a final answer
-        await self._emit({"event": "error", "reason": "max_steps_reached", **tok})
-        return {
-            "answer": "(reached maximum steps without a final answer)",
-            "messages": messages,
-            **tok,
-        }
+        await self._emit({"event": "answer", "content": answer, **tok_for_emit})
+        return result

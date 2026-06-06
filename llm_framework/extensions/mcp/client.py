@@ -5,8 +5,12 @@ import inspect
 import json
 import logging
 import os
+import time
+from typing import Any
 
 import httpx
+
+from llm_framework.observability import MCPEvent
 
 log = logging.getLogger(__name__)
 
@@ -23,15 +27,22 @@ class MCPClient:
 
     # --- construction ---
 
-    def __init__(self, transport: str, timeout: float | None = None, **kwargs):
+    def __init__(
+        self,
+        transport: str,
+        timeout: float | None = None,
+        on_mcp: Any | None = None,
+        **kwargs,
+    ):
         self._transport = transport
         self._timeout = timeout
+        self.on_mcp = on_mcp
         # stdio state
         self._command: str = kwargs.get("command", "")
         self._args: list = kwargs.get("args", [])
         self._env: dict | None = kwargs.get("env")
-        self._process = None
-        self._reader_task = None
+        self._process: asyncio.subprocess.Process | None = None
+        self._reader_task: asyncio.Task | None = None
         self._pending: dict[int, asyncio.Future] = {}
         self._id_counter = 0
         # http state
@@ -45,6 +56,7 @@ class MCPClient:
         args: list[str] | None = None,
         env: dict | None = None,
         timeout: float = 60.0,
+        on_mcp: Any | None = None,
     ):
         """Connect to an MCP server running as a subprocess over stdio.
 
@@ -53,18 +65,27 @@ class MCPClient:
             args: Command-line arguments (e.g. `["run", "memory-server"]`).
             env: Optional environment variables merged into the subprocess environment.
             timeout: Per-call timeout in seconds (default 60). Subprocess is killed on context exit.
+            on_mcp: Optional observability callback receiving `MCPEvent` for each tool call.
         """
-        return cls("stdio", timeout=timeout, command=command, args=args or [], env=env)
+        return cls(
+            "stdio",
+            timeout=timeout,
+            on_mcp=on_mcp,
+            command=command,
+            args=args or [],
+            env=env,
+        )
 
     @classmethod
-    def http(cls, url: str, timeout: float = 300.0):
+    def http(cls, url: str, timeout: float = 300.0, on_mcp: Any | None = None):
         """Connect to an MCP server over streamable HTTP.
 
         Args:
             url: Full URL to the MCP endpoint (e.g. `http://localhost:8080/mcp`).
             timeout: Request timeout in seconds (default 300). Must cover the full remote ReAct loop round-trip.
+            on_mcp: Optional observability callback receiving `MCPEvent` for each tool call.
         """
-        return cls("http", timeout=timeout, url=url)
+        return cls("http", timeout=timeout, on_mcp=on_mcp, url=url)
 
     # --- context manager ---
 
@@ -101,8 +122,10 @@ class MCPClient:
         # notify the server that the client is ready to send requests
         await self._stdio_notify("notifications/initialized")
 
-    async def _stdio_reader(self):
+    async def _stdio_reader(self) -> None:
         try:
+            assert self._process is not None
+            assert self._process.stdout is not None
             while True:
                 line = await self._process.stdout.readline()
                 if not line:
@@ -128,12 +151,16 @@ class MCPClient:
         self._id_counter += 1
         return self._id_counter
 
-    async def _stdio_notify(self, method: str, params: dict | None = None):
+    async def _stdio_notify(self, method: str, params: dict | None = None) -> None:
+        assert self._process is not None
+        assert self._process.stdin is not None
         msg = json.dumps({"jsonrpc": "2.0", "method": method, "params": params or {}})
         self._process.stdin.write((msg + "\n").encode())
         await self._process.stdin.drain()
 
     async def _stdio_call(self, method: str, params: dict) -> dict:
+        assert self._process is not None
+        assert self._process.stdin is not None
         req_id = self._next_id()
         fut = asyncio.get_running_loop().create_future()
         self._pending[req_id] = fut
@@ -144,7 +171,7 @@ class MCPClient:
         await self._process.stdin.drain()
         return await fut
 
-    async def _stdio_close(self):
+    async def _stdio_close(self) -> None:
         if self._reader_task:
             self._reader_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -158,7 +185,7 @@ class MCPClient:
     async def _http_call(self, method: str, params: dict) -> dict:
         req_id = self._next_id()
         msg = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
-        async with self._http.stream("POST", self._url, json=msg) as resp:
+        async with self._http.stream("POST", self._url, json=msg) as resp:  # type: ignore[union-attr]
             async for line in resp.aiter_lines():
                 if line.startswith("data: "):
                     data = json.loads(line[6:])
@@ -171,7 +198,7 @@ class MCPClient:
         msg = {"jsonrpc": "2.0", "method": method, "params": params or {}}
         try:
             # drain the response stream so the server can finalize the response
-            async with self._http.stream("POST", self._url, json=msg) as resp:
+            async with self._http.stream("POST", self._url, json=msg) as resp:  # type: ignore[union-attr]
                 async for _ in resp.aiter_bytes():
                     pass
         except Exception as e:
@@ -191,18 +218,38 @@ class MCPClient:
         transport = self._transport
         client = self
         call_timeout = self._timeout
+        on_mcp = self.on_mcp
+        server_id = self._command or self._url
 
         async def proxy_fn(**kwargs):
             args_payload = {"name": mcp_tool["name"], "arguments": kwargs}
-            if transport == "stdio":
-                coro = client._stdio_call("tools/call", args_payload)
-                result = (
-                    await asyncio.wait_for(coro, timeout=call_timeout)
-                    if call_timeout is not None
-                    else await coro
-                )
-            else:
-                result = await client._http_call("tools/call", args_payload)
+            start = time.perf_counter()
+            err: str | None = None
+            try:
+                if transport == "stdio":
+                    coro = client._stdio_call("tools/call", args_payload)
+                    result = (
+                        await asyncio.wait_for(coro, timeout=call_timeout)
+                        if call_timeout is not None
+                        else await coro
+                    )
+                else:
+                    result = await client._http_call("tools/call", args_payload)
+            except Exception as e:
+                err = f"{type(e).__name__}: {e}"
+                raise
+            finally:
+                latency_ms = (time.perf_counter() - start) * 1000.0
+                if on_mcp:
+                    await on_mcp(
+                        MCPEvent(
+                            server=server_id or "unknown",
+                            tool=mcp_tool["name"],
+                            args=args_payload,
+                            latency_ms=latency_ms,
+                            error=err,
+                        )
+                    )
             parts = [
                 c["text"]
                 for c in result.get("content", [])
@@ -233,7 +280,7 @@ class MCPClient:
                 schema["properties"][pname]["description"] = pdesc
 
         # schema grafted so the agent sees a uniform tool interface
-        proxy_fn.schema = {
+        proxy_fn.schema = {  # type: ignore[attr-defined]
             "type": "function",
             "function": {
                 "name": mcp_tool["name"],
@@ -241,8 +288,8 @@ class MCPClient:
                 "parameters": schema,
             },
         }
-        proxy_fn.name = mcp_tool["name"]
-        proxy_fn.description = clean_desc
+        proxy_fn.name = mcp_tool["name"]  # type: ignore[attr-defined]
+        proxy_fn.description = clean_desc  # type: ignore[attr-defined]
         return proxy_fn
 
 

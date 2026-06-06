@@ -1,6 +1,12 @@
-from llm_framework.core.agent import Agent
-from llm_framework.core.history import HistoryBuffer
-from llm_framework.core.tools import tool
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
+from .agent import Agent, AgentEvent
+from .history import HistoryBuffer
+from .protocols import AuthContextProtocol, LLMClientProtocol
+from .tools import tool
 
 
 class Orchestrator:
@@ -10,14 +16,14 @@ class Orchestrator:
 
     def __init__(
         self,
-        client: object,
+        client: LLMClientProtocol,
         sub_agents: dict[str, Agent],
         max_steps: int = 10,
         max_tokens: int = 4096,
         max_retries: int = 3,
         history_max_tokens: int = 8000,
-        on_event: object | None = None,
-    ):
+        on_event: Callable[[AgentEvent], object] | None = None,
+    ) -> None:
         """
         Args:
             client: An `LLMClient` instance for the supervisor agent.
@@ -43,7 +49,7 @@ class Orchestrator:
                 agent.on_event = lambda e: on_event({**e, "delegated_to": agent_name})
             result = await agent.run(task)
             agent.on_event = original_on_event
-            return result.get("answer", "(no answer)")
+            return str(result.get("answer", "(no answer)"))
 
         self._system_prompt = (
             f"You are a supervisor. Delegate tasks to sub-agents as needed. "
@@ -64,8 +70,8 @@ class Orchestrator:
         self,
         prompt: str,
         system_prompt: str | None = None,
-        auth_context: object | None = None,
-    ):
+        auth_context: AuthContextProtocol | None = None,
+    ) -> dict[str, Any]:
         return await self._history.run(
             self._agent,
             prompt,

@@ -1,5 +1,9 @@
 import json
 import re
+import time
+from typing import Any
+
+from llm_framework.observability import GuardrailEvent
 
 _POLICY_SCHEMA = {
     "type": "json_schema",
@@ -53,14 +57,20 @@ def strip_pii():
     return guard
 
 
-def llm_guard(client, policy: str):
+def llm_guard(client, policy: str, on_guard: Any | None = None):
     """Return an async guard that evaluates text against a natural language policy using an LLM.
 
     Requires a provider that supports structured output (json_schema response_format with strict=True).
+
+    Args:
+        client: An `LLMClient` instance.
+        policy: Natural-language policy description passed to the system prompt.
+        on_guard: Optional observability callback receiving `GuardrailEvent` on each guard invocation.
     """
 
     # LLM evaluation catches contextual violations regex misses
     async def guard(text: str) -> str:
+        start = time.perf_counter()
         response = await client.chat_completions(
             messages=[
                 {
@@ -82,8 +92,22 @@ def llm_guard(client, policy: str):
         )
         verdict = response["choices"][0]["message"]["content"]
         verdict_data = json.loads(verdict)
-        if verdict_data["status"].upper() == "BLOCK":
-            raise ValueError(f"Guard blocked: {verdict_data['reason']}")
+        latency_ms = (time.perf_counter() - start) * 1000.0
+        verdict_str = verdict_data["status"].upper()
+        reason_str = verdict_data.get("reason", "") or None
+        block = verdict_str == "BLOCK"
+        if on_guard:
+            await on_guard(
+                GuardrailEvent(
+                    guard_type="llm_guard",
+                    verdict="block" if block else "allow",
+                    policy=policy[:500] if policy else None,
+                    latency_ms=latency_ms,
+                    reason=reason_str,
+                )
+            )
+        if block:
+            raise ValueError(f"Guard blocked: {reason_str}")
         return text
 
     return guard

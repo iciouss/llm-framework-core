@@ -9,14 +9,20 @@ description = "Minimal Python library for building LLM-powered agents with a low
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.13"
-dependencies = ["httpx>=0.28.1", "python-dotenv>=1.2.2"]
+dependencies = [
+    "defusedxml>=0.7.1",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.2.2",
+]
 
 [project.optional-dependencies]
 # Library extras — extend the core library; install only what you need
 mcp = ["fastapi>=0.115.0"]
-rag = ["pypdf>=6.12.2", "semantic-text-splitter>=0.30.1", "sqlite-vec>=0.1.9"]
+rag = ["pypdf>=6.12.2", "semantic-text-splitter>=0.30.1", "sqlite-vec>=0.1.9", "defusedxml>=0.7.1"]
 qdrant = ["qdrant-client>=1.17.1"]
 oidc = ["PyJWT[crypto]>=2.9.0"]
+# Server entry-point scripts (knowledge-server, memory-server)
+server = ["uvicorn>=0.34.0", "llm-framework[mcp]"]
 # Full-featured library install; recommended for most users
 std = ["llm-framework[rag,oidc]"]
 
@@ -36,6 +42,10 @@ dev = ["pytest>=9.0.3", "pytest-asyncio>=1.4.0", "ruff>=0.15.15"]
 [tool.ruff]
 target-version = "py313"
 line-length = 88
+
+[tool.deptry.package_module_name_map]
+"python-dotenv" = "dotenv"
+"PyJWT" = "jwt"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]

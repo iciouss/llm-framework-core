@@ -1,32 +1,44 @@
 import logging
 import os
+import time
 import uuid
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from dotenv import find_dotenv, load_dotenv
-
+from llm_framework._env import load_env
 from llm_framework._optional import require as _require
 from llm_framework.core.llm import LLMClient
+from llm_framework.core.protocols import EmbeddingClientProtocol
+from llm_framework.observability import RAGEvent
 
 from ._converter import to_markdown
+
+if TYPE_CHECKING:
+    from semantic_text_splitter import MarkdownSplitter as _MarkdownSplitterType
+
+    from llm_framework.extensions.rag.vector_store.qdrant import (
+        QdrantBackend as _QdrantType,
+    )
+    from llm_framework.extensions.rag.vector_store.sqlite import (
+        SqliteVecBackend as _SqliteType,
+    )
 
 log = logging.getLogger(__name__)
 
 try:
     from semantic_text_splitter import MarkdownSplitter
 except ImportError:
-    MarkdownSplitter = None  # type: ignore[assignment]
+    MarkdownSplitter = None  # type: ignore[misc]
 
 try:
     from llm_framework.extensions.rag.vector_store.sqlite import SqliteVecBackend
 except ImportError:
-    SqliteVecBackend = None  # type: ignore[assignment]
+    SqliteVecBackend = None  # type: ignore[misc,assignment]
 
 try:
     from llm_framework.extensions.rag.vector_store.qdrant import QdrantBackend
 except ImportError:
-    QdrantBackend = None  # type: ignore[assignment]
+    QdrantBackend = None  # type: ignore[misc,assignment]
 
 
 @runtime_checkable
@@ -67,7 +79,8 @@ def backend_from_env(collection: str | None = None) -> BaseStorageBackend:
         _require("qdrant_client", QdrantBackend)
         return QdrantBackend(
             collection_name=collection
-            or os.getenv("QDRANT_COLLECTION", "knowledge_base"),
+            or os.getenv("QDRANT_COLLECTION")
+            or "knowledge_base",
             vector_size=int(os.getenv("VECTOR_SIZE", "768")),
             path=os.getenv("QDRANT_PATH"),
             url=os.getenv("QDRANT_URL"),
@@ -81,11 +94,12 @@ class RAGStore:
 
     def __init__(
         self,
-        llm_client: object,
+        llm_client: EmbeddingClientProtocol,
         storage_backend: BaseStorageBackend,
         default_max_tokens: int = 300,
         embed_batch_size: int = 64,
         _owns_client: bool = False,
+        on_rag: Any | None = None,
     ):
         """
         Args:
@@ -93,18 +107,20 @@ class RAGStore:
             storage_backend: A `BaseStorageBackend` implementation (e.g. `QdrantBackend`).
             default_max_tokens: Approximate token limit per chunk when ingesting files (default 300).
             embed_batch_size: Maximum strings per embedding API call; prevents exceeding provider limits (default 64).
+            on_rag: Optional observability callback receiving `RAGEvent` on ingest/search.
         """
         self.llm = llm_client
         self.storage = storage_backend
         self.default_max_tokens = default_max_tokens
         self._embed_batch_size = embed_batch_size
         self._owns_client = _owns_client
+        self.on_rag = on_rag
         _require("semantic_text_splitter", MarkdownSplitter)
 
     @classmethod
     def from_env(cls, storage_backend: BaseStorageBackend) -> "RAGStore":
         "Construct a RAGStore from env vars; must be used as an async context manager to avoid leaking the HTTP client."
-        load_dotenv(find_dotenv(usecwd=True), override=True)
+        load_env()
         client = LLMClient(
             base_url=os.environ["LLM_BASE_URL"],
             api_key=os.environ["LLM_API_KEY"],
@@ -164,10 +180,13 @@ class RAGStore:
 
         # batch calls to stay within provider per-request token limits
         vectors: list[list[float]] = []
+        start = time.perf_counter()
         for i in range(0, len(chunks), self._embed_batch_size):
             batch = chunks[i : i + self._embed_batch_size]
             vectors.extend(await self.llm.embeddings(batch))
+        ingest_ms = (time.perf_counter() - start) * 1000.0
         # deterministic UUIDs make re-ingestion idempotent and satisfy Qdrant point id format
+        doc_id = str(uuid.uuid5(uuid.NAMESPACE_URL, str(path_obj)))
         ids = [
             str(uuid.uuid5(uuid.NAMESPACE_URL, f"{path_obj.name}:{chunk}"))
             for chunk in chunks
@@ -175,12 +194,34 @@ class RAGStore:
         payloads = [{"text": chunk, "source": path_obj.name} for chunk in chunks]
 
         await self.storage.upsert(ids, vectors, payloads)
+        if self.on_rag:
+            await self.on_rag(
+                RAGEvent(
+                    op="ingest",
+                    collection_id=getattr(self.storage, "collection_id", "default")
+                    or "default",
+                    doc_id=doc_id,
+                    chunk_count=len(chunks),
+                    latency_ms=ingest_ms,
+                )
+            )
         return len(chunks)
 
     async def search(self, query: str, limit: int = 3):
         "Return the top-k most semantically similar passages for a query string."
+        start = time.perf_counter()
         query_vector = (await self.llm.embeddings([query]))[0]
+        search_ms = (time.perf_counter() - start) * 1000.0
         payloads = await self.storage.search(query_vector, limit)
+        if self.on_rag:
+            await self.on_rag(
+                RAGEvent(
+                    op="search",
+                    collection_id=getattr(self.storage, "collection_id", "default")
+                    or "default",
+                    latency_ms=search_ms,
+                )
+            )
         return [
             f"Source: {payload.get('source', 'Unknown')}\n\n{payload.get('text', '')}"
             for payload in payloads

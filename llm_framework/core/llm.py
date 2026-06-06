@@ -1,12 +1,38 @@
 import asyncio
 import logging
 import os
+import time
 from typing import Any
 
 import httpx
-from dotenv import find_dotenv, load_dotenv
+
+from llm_framework._env import load_env
+from llm_framework.observability import (
+    EmbeddingEvent,
+    LLMCallEvent,
+    TokenUsage,
+    emit,
+)
 
 log = logging.getLogger(__name__)
+
+
+def _usage_from_response(payload: dict[str, Any]) -> TokenUsage:
+    """Extract a TokenUsage from a chat-completions response payload. Defaults to zeros."""
+    usage = payload.get("usage") or {}
+    details = usage.get("completion_tokens_details") or {}
+    return TokenUsage(
+        prompt_tokens=int(usage.get("prompt_tokens") or 0),
+        completion_tokens=int(usage.get("completion_tokens") or 0),
+        reasoning_tokens=int(details.get("reasoning_tokens") or 0),
+        total_tokens=int(usage.get("total_tokens") or 0),
+    )
+
+
+def _usage_from_embeddings_response(payload: dict[str, Any]) -> int:
+    """Extract total_tokens from an embeddings response payload, defaulting to 0."""
+    usage = payload.get("usage") or {}
+    return int(usage.get("total_tokens") or 0)
 
 
 class LLMClient:
@@ -43,7 +69,7 @@ class LLMClient:
     @classmethod
     def from_env(cls) -> "LLMClient":
         "Construct from env vars; reads LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, CA_BUNDLE_PATH."
-        load_dotenv(find_dotenv(usecwd=True), override=True)
+        load_env()
         ca_bundle = os.getenv("CA_BUNDLE_PATH") or None
         if ca_bundle and not os.path.isfile(ca_bundle):
             raise FileNotFoundError(
@@ -97,27 +123,50 @@ class LLMClient:
         if response_format:
             payload["response_format"] = response_format
 
-        for attempt in range(max_retries):
-            try:
-                r = await self._http.post(
-                    f"{self.base_url}/chat/completions", json=payload
+        start = time.perf_counter()
+        response: dict[str, Any] | None = None
+        err: str | None = None
+        try:
+            for attempt in range(max_retries):
+                try:
+                    r = await self._http.post(
+                        f"{self.base_url}/chat/completions", json=payload
+                    )
+                    self._check_response(r)
+                    response = r.json()
+                    return response
+                except httpx.HTTPStatusError as e:
+                    err = f"http_{e.response.status_code}"
+                    # 429/5xx are transient; back off exponentially
+                    if (
+                        e.response.status_code in (429, 500, 502, 503, 504)
+                        and attempt < max_retries - 1
+                    ):
+                        await asyncio.sleep(2**attempt)
+                        continue
+                    raise
+                except httpx.RequestError as e:
+                    err = f"request_{type(e).__name__}"
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2**attempt)
+                        continue
+                    raise
+        finally:
+            latency_ms = (time.perf_counter() - start) * 1000.0
+            usage = _usage_from_response(response) if response else TokenUsage()
+            response_id = (response or {}).get("id")
+            await emit(
+                LLMCallEvent(
+                    op="chat_completions",
+                    model=self.model,
+                    messages_count=len(messages),
+                    response_id=response_id,
+                    usage=usage,
+                    latency_ms=latency_ms,
+                    error=err,
                 )
-                self._check_response(r)
-                return r.json()
-            except httpx.HTTPStatusError as e:
-                # 429/5xx are transient; back off exponentially
-                if (
-                    e.response.status_code in (429, 500, 502, 503, 504)
-                    and attempt < max_retries - 1
-                ):
-                    await asyncio.sleep(2**attempt)
-                    continue
-                raise
-            except httpx.RequestError:
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2**attempt)
-                    continue
-                raise
+            )
+        raise RuntimeError(f"chat_completions failed after {max_retries} attempts")
 
     async def embeddings(
         self, input_texts: list[str], max_retries: int = 3
@@ -135,26 +184,51 @@ class LLMClient:
             "model": self.model,
             "input": input_texts,
         }
-        for attempt in range(max_retries):
-            try:
-                r = await self._http.post(f"{self.base_url}/embeddings", json=payload)
-                self._check_response(r)
-                data = r.json().get("data", [])
-                return [item["embedding"] for item in data]
-            except httpx.HTTPStatusError as e:
-                # 429/5xx are transient; back off exponentially
-                if (
-                    e.response.status_code in (429, 500, 502, 503, 504)
-                    and attempt < max_retries - 1
-                ):
-                    await asyncio.sleep(2**attempt)
-                    continue
-                raise
-            except httpx.RequestError:
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2**attempt)
-                    continue
-                raise
+        start = time.perf_counter()
+        result: list[list[float]] | None = None
+        err: str | None = None
+        total_tokens = 0
+        try:
+            for attempt in range(max_retries):
+                try:
+                    r = await self._http.post(
+                        f"{self.base_url}/embeddings", json=payload
+                    )
+                    self._check_response(r)
+                    body = r.json()
+                    data = body.get("data", [])
+                    result = [item["embedding"] for item in data]
+                    total_tokens = _usage_from_embeddings_response(body)
+                    return result
+                except httpx.HTTPStatusError as e:
+                    err = f"http_{e.response.status_code}"
+                    # 429/5xx are transient; back off exponentially
+                    if (
+                        e.response.status_code in (429, 500, 502, 503, 504)
+                        and attempt < max_retries - 1
+                    ):
+                        await asyncio.sleep(2**attempt)
+                        continue
+                    raise
+                except httpx.RequestError as e:
+                    err = f"request_{type(e).__name__}"
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2**attempt)
+                        continue
+                    raise
+        finally:
+            latency_ms = (time.perf_counter() - start) * 1000.0
+            await emit(
+                EmbeddingEvent(
+                    op="ingest",
+                    model=self.model,
+                    batch_size=len(input_texts),
+                    total_tokens=total_tokens,
+                    latency_ms=latency_ms,
+                    error=err,
+                )
+            )
+        raise RuntimeError(f"embeddings failed after {max_retries} attempts")
 
     # --- internal ---
 
@@ -166,11 +240,11 @@ class LLMClient:
 
     # --- lifecycle ---
 
-    async def aclose(self):
+    async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "LLMClient":
         return self
 
-    async def __aexit__(self, *_):
+    async def __aexit__(self, *_: object) -> None:
         await self.aclose()

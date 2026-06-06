@@ -1,4 +1,6 @@
-from llm_framework.extensions.auth._context import AuthContext
+from __future__ import annotations
+
+from ._context import AuthContext
 
 
 class StaticAuthProvider:
@@ -8,7 +10,7 @@ class StaticAuthProvider:
         self,
         api_keys: dict[str, AuthContext] | None = None,
         users: dict[str, AuthContext] | None = None,
-    ):
+    ) -> None:
         """
         Args:
             api_keys: Map of raw key string to AuthContext, matched via `{"type": "api_key", "key": ...}`.

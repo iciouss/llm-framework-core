@@ -1,9 +1,10 @@
 import json
 import logging
 import re
-import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
+
+import defusedxml.ElementTree as ET
 
 from llm_framework._optional import require as _require
 

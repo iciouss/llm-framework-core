@@ -3,8 +3,8 @@ import dataclasses
 import inspect
 import json
 import sys
-from collections.abc import Callable
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from llm_framework._optional import require as _require
 from llm_framework.core.tools import build_schema
@@ -47,7 +47,7 @@ class MCPServer:
     def __init__(
         self,
         name: str,
-        lifespan: Callable[["MCPServer"], asynccontextmanager] | None = None,
+        lifespan: Callable[["MCPServer"], AbstractAsyncContextManager[dict]] | None = None,
     ):
         """
         Args:
