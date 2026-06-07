@@ -17,6 +17,7 @@ from llm_framework.extensions.auth import (
     MemoryPolicyBackend,
     StaticAuthProvider,
 )
+from llm_framework.observability import set_hook
 from llm_framework.tools import add_numbers, fetch_url, get_current_datetime, write_file
 
 POLICY = {
@@ -44,22 +45,22 @@ provider = StaticAuthProvider(
 )
 
 
-def on_event(e: dict):
-    if e["event"] == "action":
-        print(f"    -> {e['tool']}()")
-    elif e["event"] == "tool_error":
-        print(f"    !! {e['error']}")
-    elif e["event"] == "answer":
-        print(f"    {e['content']}")
+class Trace:
+    async def emit(self, event):
+        if event.event_type == "action":
+            print(f"    -> {event.payload.get('tool')}()")
+        elif event.event_type == "tool_error":
+            print(f"    !! {event.payload.get('error')}")
+        elif event.event_type == "answer":
+            print(f"    {str(event.payload.get('content', ''))[:200]}")
 
 
 async def main():
+    set_hook(Trace())
     gate = AuthGate(MemoryPolicyBackend(POLICY))
 
     async with LLMClient.from_env() as client:
-        agent = Agent(
-            client, tools=ALL_TOOLS, auth_gate=gate, temperature=0.0, on_event=on_event
-        )
+        agent = Agent(client, tools=ALL_TOOLS, auth_gate=gate, temperature=0.0)
 
         for username in ["bob", "alice", "svc"]:
             ctx = await provider.resolve({"type": "username", "username": username})

@@ -148,7 +148,7 @@ async def test_agent_schema_filtering_integration(mock_llm):
     assert set(sent_names) == {"tool_a", "tool_b"}
 
 
-async def test_agent_execution_time_denial():
+async def test_agent_execution_time_denial(recording_hook):
     gate = make_gate(POLICY)
 
     class ForcedToolCallClient:
@@ -196,20 +196,15 @@ async def test_agent_execution_time_denial():
                 "usage": {"prompt_tokens": 10, "completion_tokens": 5},
             }
 
-    errors = []
-
-    def on_event(e):
-        if e["event"] == "tool_error":
-            errors.append(e)
-
     ctx = AuthContext(user_id="alice", roles={"analyst"})
-    agent = Agent(
-        ForcedToolCallClient(), tools=ALL_TOOLS, auth_gate=gate, on_event=on_event
-    )
+    agent = Agent(ForcedToolCallClient(), tools=ALL_TOOLS, auth_gate=gate)
     await agent.run("do something", auth_context=ctx)
+    errors = [e for e in recording_hook.events if e.event_type == "tool_error"]
     print("errors captured:")
     pprint.pprint(errors)
-    assert any("access_denied" in str(e.get("reason", "")) for e in errors)
+    assert any(
+        "access_denied" in str(e.payload.get("reason", "")) for e in errors
+    )
 
 
 async def test_backward_compat_no_auth_gate(mock_llm):

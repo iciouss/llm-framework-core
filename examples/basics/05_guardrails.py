@@ -39,8 +39,9 @@ async def main():
             output_guards=[
                 strip_pii(),
             ],
-            # on_event=None is the default — guardrails that block raise before any
-            # agent events fire, so event tracing adds little here.
+            # guardrails that block raise before any agent events fire, so event
+            # tracing adds little here. Use set_hook(print_hook()) in main() to
+            # see the events from the passing-request run.
         )
 
         print("\n=== Passing request ===")

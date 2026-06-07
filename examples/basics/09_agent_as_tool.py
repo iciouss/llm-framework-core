@@ -13,6 +13,7 @@ from pathlib import Path
 
 from llm_framework.core import Agent, LLMClient
 from llm_framework.extensions import MCPClient, MCPManager
+from llm_framework.observability import set_hook
 
 # Resolve the agent server path relative to this file.
 RESEARCHER = str(
@@ -24,17 +25,19 @@ RESEARCHER = str(
 
 
 # The interesting moment here is the delegation: task sent out, answer received.
-def log_delegation(e: dict):
-    if e["event"] == "action":
-        task = e.get("args", {}).get("task", "")
-        print(f"  [delegating to {e.get('tool')}] {str(task)[:120]}")
-    elif e["event"] == "observation":
-        print(f"  [remote answer] {str(e.get('content', ''))[:200]}")
-    elif e["event"] == "tool_error":
-        print(f"  [delegation failed] {e.get('error', '')}")
+class LogDelegation:
+    async def emit(self, event):
+        if event.event_type == "action":
+            task = event.payload.get("args", {}).get("task", "")
+            print(f"  [delegating to {event.payload.get('tool')}] {str(task)[:120]}")
+        elif event.event_type == "observation":
+            print(f"  [remote answer] {str(event.payload.get('content', ''))[:200]}")
+        elif event.event_type == "tool_error":
+            print(f"  [delegation failed] {event.payload.get('error', '')}")
 
 
 async def main():
+    set_hook(LogDelegation())
     # Spawn the researcher agent as a subprocess — it runs its own ReAct loop internally.
     # Alternative (pre-running HTTP server): MCPClient.http("http://localhost:8090/mcp", timeout=300.0)
     # The timeout=300.0 on HTTP gives the remote agent up to 5 minutes to complete.
@@ -46,12 +49,7 @@ async def main():
         remote_tools = await mcp.get_all_tools()
         print(f"Remote tools available: {[t.name for t in remote_tools]}\n")
 
-        agent = Agent(
-            client=client,
-            tools=remote_tools,
-            max_tokens=2048,
-            on_event=log_delegation,
-        )
+        agent = Agent(client=client, tools=remote_tools, max_tokens=2048)
 
         result = await agent.run(
             "Research what Python asyncio is and give me a two-sentence explanation I can share with a junior developer."
@@ -60,7 +58,7 @@ async def main():
         print("\n--- ANSWER ---")
         print(result["answer"])
         print(
-            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']}"
+            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']} billable={result['total_billable_tokens']}"
         )
 
 

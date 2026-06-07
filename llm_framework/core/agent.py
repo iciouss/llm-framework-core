@@ -5,10 +5,13 @@ import json
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from llm_framework.observability import AgentStepEvent, TokenUsage
+from llm_framework.observability import emit as _obs_emit
+
 from .protocols import AuthContextProtocol, AuthGateProtocol, LLMClientProtocol
 
 if TYPE_CHECKING:
-    from llm_framework.extensions.auth import AuthContext, AuthGate
+    pass
 
 _MAX_CHARS = 20_000
 
@@ -49,10 +52,11 @@ class Agent:
         system_prompt: str | None = None,
         input_guards: list | None = None,
         output_guards: list | None = None,
-        on_event: "Callable[[AgentEvent], object] | None" = None,
         approval_callback: Callable[..., object] | None = None,
         approval_tools: list[str] | None = None,
         auth_gate: AuthGateProtocol | None = None,
+        before_iteration_callback: Callable[[int, int], object] | None = None,
+        on_step: Callable[[AgentStepEvent], object] | None = None,
     ) -> None:
         """
         Args:
@@ -65,10 +69,11 @@ class Agent:
             system_prompt: Persistent persona injected as the system message on every `run()` call; overridable per-call.
             input_guards: List of callables `(str) -> str` applied to the prompt before the LLM sees it. Raise to block, return to pass/transform.
             output_guards: List of callables `(str) -> str` applied to the final answer. Raise to block, return to pass/transform.
-            on_event: Callable receiving structured event dicts at each step. `None` for silent operation.
             approval_callback: Sync or async `(name: str, args: dict) -> bool` called before each tool runs. Return `False` to deny.
             approval_tools: Set of tool names that require approval. If `None`, every tool requires approval.
             auth_gate: An `AuthGate` instance that filters tool schemas and enforces access at execution time. `None` disables auth (all tools allowed).
+            before_iteration_callback: Sync or async callable `(step: int, max_steps: int) -> None` invoked at the start of each ReAct iteration. Enables callers to mutate `max_steps` at runtime to extend or shorten the iteration limit without subclassing.
+            on_step: Optional callable receiving `AgentStepEvent` at each ReAct iteration. Fires in addition to the global observability hook. Use the global hook (`llm_framework.observability.set_hook()`) for typical observability wiring.
         """
         self.client = client
         self.max_steps = max_steps
@@ -86,7 +91,6 @@ class Agent:
         self.schemas = [f.schema for f in (tools or []) if hasattr(f, "schema")]
         self.input_guards = input_guards or []
         self.output_guards = output_guards or []
-        self.on_event = on_event
         self.approval_callback = approval_callback
         # None means every tool requires approval; a set scopes it to specific names
         self.approval_tools = (
@@ -94,15 +98,49 @@ class Agent:
         )
         # None disables auth — all tools are available (backward-compatible default)
         self.auth_gate = auth_gate
+        self.before_iteration_callback = before_iteration_callback
+        self.on_step = on_step
 
     # --- event emission ---
 
     async def _emit(self, event: AgentEvent) -> None:
-        # supports both sync and async on_event callbacks
-        if self.on_event:
-            result = self.on_event(event)
+        # tag sub-agent events with the delegating agent name (set by Orchestrator)
+        if getattr(self, "_current_delegated_to", None):
+            event = {**event, "delegated_to": self._current_delegated_to}
+        typed_event = self._build_typed_event(event)
+        if self.on_step:
+            result = self.on_step(typed_event)
             if asyncio.iscoroutine(result):
                 await result
+        await _obs_emit(typed_event)
+
+    @staticmethod
+    def _build_typed_event(event: AgentEvent) -> AgentStepEvent:
+        """Convert the raw agent event dict into a typed AgentStepEvent."""
+        tok = TokenUsage(
+            prompt_tokens=event.get("prompt_tokens", 0),
+            completion_tokens=event.get("completion_tokens", 0),
+            reasoning_tokens=event.get("reasoning_tokens", 0),
+            context_tokens=event.get("context_tokens", 0),
+        )
+        return AgentStepEvent(
+            event_type=event.get("event", ""),
+            step=event.get("step", 0),
+            payload={
+                k: v
+                for k, v in event.items()
+                if k
+                not in (
+                    "event",
+                    "step",
+                    "prompt_tokens",
+                    "completion_tokens",
+                    "reasoning_tokens",
+                    "context_tokens",
+                )
+            },
+            tokens=tok,
+        )
 
     # --- tool validation and execution ---
 
@@ -119,7 +157,10 @@ class Agent:
         return None
 
     async def _execute_tool(
-        self, name: str, args: dict[str, Any], auth_context: AuthContextProtocol | None = None
+        self,
+        name: str,
+        args: dict[str, Any],
+        auth_context: AuthContextProtocol | None = None,
     ) -> str:
         # registry lookup
         if name not in self.registry:
@@ -183,7 +224,11 @@ class Agent:
             return f"Error executing {name}: {error}"
 
     async def _run_tool_call(
-        self, tc: dict[str, Any], step: int, tok: AgentEvent, auth_context: AuthContextProtocol | None = None
+        self,
+        tc: dict[str, Any],
+        step: int,
+        tok: AgentEvent,
+        auth_context: AuthContextProtocol | None = None,
     ) -> dict[str, Any]:
         # unpack the LLM's tool call request
         fn_name = tc["function"]["name"]
@@ -267,6 +312,10 @@ class Agent:
         total_reasoning_tokens = 0
 
         for step in range(self.max_steps):
+            if self.before_iteration_callback:
+                cb_result = self.before_iteration_callback(step, self.max_steps)
+                if asyncio.iscoroutine(cb_result):
+                    await cb_result
             visible_schemas = self._apply_auth_filter(self.schemas, auth_context)
 
             response = await self.client.chat_completions(
@@ -306,7 +355,12 @@ class Agent:
             )
             if reasoning:
                 await self._emit(
-                    {"event": "thought", "kind": "reasoning", "content": reasoning.strip(), **tok}  # type: ignore[misc]
+                    {
+                        "event": "thought",
+                        "kind": "reasoning",
+                        "content": reasoning.strip(),
+                        **tok,
+                    }  # type: ignore[misc]
                 )
 
             content = msg.get("content") or ""
@@ -357,6 +411,7 @@ class Agent:
         system_prompt: str | None = None,
         prior_messages: list[dict[str, Any]] | None = None,
         auth_context: AuthContextProtocol | None = None,
+        delegated_to: str | None = None,
     ) -> dict[str, Any]:
         """Run the agent on a prompt and return the final answer with cumulative token usage.
 
@@ -386,19 +441,23 @@ class Agent:
             + [{"role": "user", "content": prompt}]
         )
 
-        await self._emit({"event": "task", "prompt": prompt})
+        # tag every event this run emits with delegated_to (cleared on exit)
+        self._current_delegated_to = delegated_to
+        try:
+            await self._emit({"event": "task", "prompt": prompt})
+            result = await self._run_loop(messages, auth_context)
 
-        result = await self._run_loop(messages, auth_context)
+            answer = str(result.get("answer", ""))
+            answer = await self._apply_output_guards(answer)
+            result["answer"] = answer
 
-        answer = str(result.get("answer", ""))
-        answer = await self._apply_output_guards(answer)
-        result["answer"] = answer
-
-        tok_for_emit: AgentEvent = {
-            "context_tokens": int(result.get("context_tokens", 0)),
-            "prompt_tokens": int(result.get("prompt_tokens", 0)),
-            "completion_tokens": int(result.get("completion_tokens", 0)),
-            "reasoning_tokens": int(result.get("reasoning_tokens", 0)),
-        }
-        await self._emit({"event": "answer", "content": answer, **tok_for_emit})
-        return result
+            tok_for_emit: AgentEvent = {
+                "context_tokens": int(result.get("context_tokens", 0)),
+                "prompt_tokens": int(result.get("prompt_tokens", 0)),
+                "completion_tokens": int(result.get("completion_tokens", 0)),
+                "reasoning_tokens": int(result.get("reasoning_tokens", 0)),
+            }
+            await self._emit({"event": "answer", "content": answer, **tok_for_emit})
+            return result
+        finally:
+            self._current_delegated_to = None

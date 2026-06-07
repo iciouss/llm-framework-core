@@ -14,6 +14,7 @@ from pathlib import Path
 
 from llm_framework.core import Agent, LLMClient
 from llm_framework.extensions import MCPClient, MCPManager
+from llm_framework.observability import set_hook
 
 ROOT = Path(__file__).parent.parent.parent
 MEMORY_SERVER = str(ROOT / "llm_framework" / "mcp_servers" / "memory_server.py")
@@ -25,22 +26,26 @@ _MEMORY_TOOLS = {"save_memory", "recall_memory", "list_memories", "delete_memory
 _RAG_TOOLS = {"ingest_file", "search_notes"}
 
 
-def trace_remote(e: dict):
-    if e["event"] == "action":
-        tool = e.get("tool", "")
-        server = (
-            "memory" if tool in _MEMORY_TOOLS else "rag" if tool in _RAG_TOOLS else "?"
-        )
-        print(
-            f"  [{server}] {tool} <- {json.dumps(e.get('args', {}), ensure_ascii=False)[:100]}"
-        )
-    elif e["event"] == "observation":
-        print(f"  [result] {str(e.get('content', ''))[:120]}")
-    elif e["event"] == "tool_error":
-        print(f"  [error]  {e.get('error', '')}")
+class TraceRemote:
+    async def emit(self, event):
+        if event.event_type == "action":
+            tool = event.payload.get("tool", "")
+            server = (
+                "memory"
+                if tool in _MEMORY_TOOLS
+                else "rag" if tool in _RAG_TOOLS else "?"
+            )
+            print(
+                f"  [{server}] {tool} <- {json.dumps(event.payload.get('args', {}), ensure_ascii=False)[:100]}"
+            )
+        elif event.event_type == "observation":
+            print(f"  [result] {str(event.payload.get('content', ''))[:120]}")
+        elif event.event_type == "tool_error":
+            print(f"  [error]  {event.payload.get('error', '')}")
 
 
 async def main():
+    set_hook(TraceRemote())
     # Pass a list of bridges — MCPManager connects to all of them concurrently
     # and merges their tools. Each bridge is its own subprocess.
     # Alternative (pre-running HTTP server): MCPClient.http("http://localhost:8000/mcp", timeout=300.0)
@@ -65,7 +70,6 @@ async def main():
                 "You are an assistant with memory and knowledge-base tools. "
                 "You have no built-in knowledge of stored data — always use tools to look things up."
             ),
-            on_event=trace_remote,
         )
 
         readme = str(ROOT / "README.md")
@@ -81,7 +85,7 @@ async def main():
         print("\n--- ANSWER ---")
         print(result["answer"])
         print(
-            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']}"
+            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']} billable={result['total_billable_tokens']}"
         )
 
 

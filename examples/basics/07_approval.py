@@ -14,6 +14,7 @@ import asyncio
 import json
 
 from llm_framework.core import Agent, LLMClient, tool
+from llm_framework.observability import set_hook
 
 
 @tool
@@ -43,16 +44,18 @@ async def approval_callback(name: str, args: dict) -> bool:
 
 # Only surface the action and its outcome — the approval prompt itself
 # is printed by the callback, so no need to duplicate it here.
-def show_approval_flow(e: dict):
-    if e["event"] == "action":
-        print(f"  [will call] {e.get('tool')}")
-    elif e["event"] == "observation":
-        print(f"  [result]    {str(e.get('content', ''))[:100]}")
-    elif e["event"] == "tool_error":
-        print(f"  [denied]    {e.get('error', '')}")
+class ShowApprovalFlow:
+    async def emit(self, event):
+        if event.event_type == "action":
+            print(f"  [will call] {event.payload.get('tool')}")
+        elif event.event_type == "observation":
+            print(f"  [result]    {str(event.payload.get('content', ''))[:100]}")
+        elif event.event_type == "tool_error":
+            print(f"  [denied]    {event.payload.get('error', '')}")
 
 
 async def main():
+    set_hook(ShowApprovalFlow())
     async with LLMClient.from_env() as client:
         agent = Agent(
             client=client,
@@ -60,7 +63,6 @@ async def main():
             # only these two require human approval before executing
             approval_callback=approval_callback,
             approval_tools=["send_email", "delete_record"],
-            on_event=show_approval_flow,
         )
 
         result = await agent.run(
@@ -70,7 +72,7 @@ async def main():
         print("\n--- ANSWER ---")
         print(result["answer"])
         print(
-            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']}"
+            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']} billable={result['total_billable_tokens']}"
         )
 
 

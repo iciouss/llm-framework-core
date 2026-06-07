@@ -16,6 +16,7 @@ import asyncio
 import json
 
 from llm_framework.core import Agent, LLMClient, cached_tool
+from llm_framework.observability import set_hook
 
 _call_count = {"get_pi": 0, "get_greeting": 0}
 
@@ -45,24 +46,23 @@ async def get_greeting(language: str) -> str:
     return greetings.get(language.lower(), f"Hello ({language})")
 
 
-def show_tools(e: dict):
-    if e["event"] == "action":
-        print(
-            f"  -> {e['tool']}({json.dumps(e.get('args', {}))}) [actual call #{_call_count.get(e['tool'], '?')}]"
-        )
-    elif e["event"] == "observation":
-        print(f"  <- {e['content'][:80]}")
-    elif e["event"] == "answer":
-        print(f"  [answer] {e['content'][:120]}")
+class ShowTools:
+    async def emit(self, event):
+        if event.event_type == "action":
+            tool = event.payload.get("tool")
+            print(
+                f"  -> {tool}({json.dumps(event.payload.get('args', {}))}) [actual call #{_call_count.get(tool, '?')}]"
+            )
+        elif event.event_type == "observation":
+            print(f"  <- {str(event.payload.get('content', ''))[:80]}")
+        elif event.event_type == "answer":
+            print(f"  [answer] {str(event.payload.get('content', ''))[:120]}")
 
 
 async def main():
+    set_hook(ShowTools())
     async with LLMClient.from_env() as client:
-        agent = Agent(
-            client=client,
-            tools=[get_pi, get_greeting],
-            on_event=show_tools,
-        )
+        agent = Agent(client=client, tools=[get_pi, get_greeting])
 
         # Ask something that will likely cause the agent to call get_pi twice.
         print("=== Run 1 ===")

@@ -12,6 +12,7 @@ import asyncio
 import json
 
 from llm_framework.core import Agent, LLMClient, tool
+from llm_framework.observability import set_hook
 
 
 # @tool reads the type hints and docstring to generate the JSON schema
@@ -29,23 +30,22 @@ def word_count(text: str) -> int:
 
 
 # Arrow notation makes the call/result pair immediately obvious.
-def show_tool_io(e: dict):
-    if e["event"] == "action":
-        print(
-            f"  -> {e.get('tool')}({json.dumps(e.get('args', {}), ensure_ascii=False)[:80]})"
-        )
-    elif e["event"] == "observation":
-        print(f"  <- {str(e.get('content', ''))[:80]}")
+class ToolIOHook:
+    async def emit(self, event):
+        if event.event_type == "action":
+            print(
+                f"  -> {event.payload.get('tool')}({json.dumps(event.payload.get('args', {}), ensure_ascii=False)[:80]})"
+            )
+        elif event.event_type == "observation":
+            print(f"  <- {str(event.payload.get('content', ''))[:80]}")
 
 
 async def main():
+    set_hook(ToolIOHook())
     async with LLMClient.from_env() as client:
         agent = Agent(
             client=client,
             tools=[celsius_to_fahrenheit, word_count],
-            on_event=lambda e: print(
-                f"  [{e['event']}] {json.dumps({k: v for k, v in e.items() if k != 'event' and 'tokens' not in k}, ensure_ascii=False)[:160]}"
-            ),
         )
 
         result = await agent.run(
@@ -56,7 +56,7 @@ async def main():
         print("\n--- ANSWER ---")
         print(result["answer"])
         print(
-            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']}"
+            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']} billable={result['total_billable_tokens']}"
         )
 
 

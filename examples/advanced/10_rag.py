@@ -18,6 +18,7 @@ from pathlib import Path
 
 from llm_framework.core import Agent, LLMClient
 from llm_framework.extensions import MCPClient, MCPManager
+from llm_framework.observability import set_hook
 
 KNOWLEDGE_SERVER = str(
     Path(__file__).parent.parent.parent
@@ -31,23 +32,25 @@ README = str(Path(__file__).parent.parent.parent / "README.md")
 
 
 # Distinguish ingest from search visually — the two RAG operations look very different.
-def trace_rag(e: dict):
-    if e["event"] == "action":
-        tool = e.get("tool", "")
-        args = e.get("args", {})
-        if "ingest" in tool:
-            print(f"  [ingest] {str(args.get('file_path', args))[:100]}")
-        elif "search" in tool:
-            print(f"  [search] {str(args.get('query', args))[:100]}")
-        else:
-            print(f"  [call]   {tool} | {json.dumps(args, ensure_ascii=False)[:100]}")
-    elif e["event"] == "observation":
-        print(f"  [result] {str(e.get('content', ''))[:160]}")
-    elif e["event"] == "tool_error":
-        print(f"  [error]  {e.get('error', '')}")
+class TraceRag:
+    async def emit(self, event):
+        if event.event_type == "action":
+            tool = event.payload.get("tool", "")
+            args = event.payload.get("args", {})
+            if "ingest" in tool:
+                print(f"  [ingest] {str(args.get('file_path', args))[:100]}")
+            elif "search" in tool:
+                print(f"  [search] {str(args.get('query', args))[:100]}")
+            else:
+                print(f"  [call]   {tool} | {json.dumps(args, ensure_ascii=False)[:100]}")
+        elif event.event_type == "observation":
+            print(f"  [result] {str(event.payload.get('content', ''))[:160]}")
+        elif event.event_type == "tool_error":
+            print(f"  [error]  {event.payload.get('error', '')}")
 
 
 async def main():
+    set_hook(TraceRag())
     # Spawn the knowledge server as a subprocess.
     # Alternative (pre-running HTTP server): MCPClient.http("http://localhost:8082/mcp")
     async with (
@@ -65,7 +68,6 @@ async def main():
                 "You answer questions from a knowledge base. "
                 "Always search before answering. If the knowledge base is empty, ingest the relevant file first."
             ),
-            on_event=trace_rag,
         )
 
         print("=== Step 1: ingest ===")
@@ -79,7 +81,7 @@ async def main():
         print("\n--- ANSWER ---")
         print(result["answer"])
         print(
-            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']}"
+            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']} billable={result['total_billable_tokens']}"
         )
 
 

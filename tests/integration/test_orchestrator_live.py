@@ -4,6 +4,7 @@ import pytest
 
 from llm_framework.core import Agent, LLMClient, Orchestrator
 from llm_framework.extensions import MCPClient, MCPManager
+from llm_framework.observability import set_hook
 
 pytestmark = pytest.mark.integration
 
@@ -11,13 +12,23 @@ pytestmark = pytest.mark.integration
 # knowledge-server also needs a live embeddings endpoint (EMBED_MODEL or LLM_MODEL in .env)
 
 
-def on_event(e):
-    print(
-        f"[{e['event'].upper()}] {json.dumps({k: v for k, v in e.items() if k != 'event'})}"
-    )
+class PrintHook:
+    def __init__(self):
+        self.delegate_marker = ""
+
+    async def emit(self, event):
+        marker = ""
+        delegated_to = getattr(event, "payload", {}).get("delegated_to")
+        if delegated_to:
+            marker = f" <{delegated_to}>"
+        print(
+            f"[{event.event_type.upper()}]{marker} {json.dumps(getattr(event, 'payload', None), default=str)}"
+        )
 
 
 async def main():
+    set_hook(PrintHook())
+
     knowledge_bridge = MCPClient.stdio("uv", ["run", "knowledge-server"])
     memory_bridge = MCPClient.stdio("uv", ["run", "memory-server"])
 
@@ -34,7 +45,6 @@ async def main():
             client=client,
             tools=knowledge_tools,
             max_steps=5,
-            on_event=on_event,
             max_tokens=4096,
         )
 
@@ -43,7 +53,6 @@ async def main():
             client=client,
             tools=memory_tools,
             max_steps=5,
-            on_event=on_event,
             max_tokens=4096,
         )
 

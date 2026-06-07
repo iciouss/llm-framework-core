@@ -1,5 +1,7 @@
 import pytest
 
+from llm_framework.observability import clear_hook, set_hook
+
 
 class MockLLMClient:
     """Scriptable LLM client for unit tests.
@@ -50,6 +52,16 @@ class MockLLMClient:
         return response
 
 
+class RecordingHook:
+    "Observability hook that appends every event to a list. Tests can inspect `events` after the run."
+
+    def __init__(self) -> None:
+        self.events: list = []
+
+    async def emit(self, event) -> None:
+        self.events.append(event)
+
+
 @pytest.fixture(autouse=True)
 def _newline_before_output():
     """Print a blank line so test stdout starts on its own line (not glued to the test name)."""
@@ -60,3 +72,12 @@ def _newline_before_output():
 def mock_llm():
     "Return a factory for MockLLMClient; call it with an optional responses list."
     return MockLLMClient
+
+
+@pytest.fixture
+def recording_hook():
+    "Install a global RecordingHook for the duration of the test; clear it on teardown."
+    hook = RecordingHook()
+    set_hook(hook)
+    yield hook
+    clear_hook()

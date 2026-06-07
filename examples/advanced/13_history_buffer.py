@@ -11,20 +11,23 @@ New here: HistoryBuffer, prior_messages in agent.run().
 import asyncio
 
 from llm_framework.core import Agent, HistoryBuffer, LLMClient
+from llm_framework.observability import set_hook
 
 
-def show_event(e: dict):
-    if e["event"] in ("answer", "task"):
-        key = "content" if e["event"] == "answer" else "prompt"
-        print(f"  [{e['event']}] {e[key][:120]}")
+class ShowEvent:
+    async def emit(self, event):
+        if event.event_type == "answer":
+            print(f"  [answer] {str(event.payload.get('content', ''))[:120]}")
+        elif event.event_type == "task":
+            print(f"  [task]   {str(event.payload.get('prompt', ''))[:120]}")
 
 
 async def main():
+    set_hook(ShowEvent())
     async with LLMClient.from_env() as client:
         agent = Agent(
             client=client,
             system_prompt="You are a concise assistant. Keep answers to two sentences.",
-            on_event=show_event,
         )
 
         # max_tokens=2000 caps the history size by estimated token count.

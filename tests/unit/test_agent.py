@@ -334,27 +334,52 @@ async def test_max_steps_limits_iterations(mock_llm):
     assert "answer" in result
 
 
-# --- on_event ---
+# --- observability hook ---
 
 
-async def test_on_event_receives_task_event(mock_llm):
-    events = []
+async def test_delegated_to_propagates_to_emitted_events(mock_llm, recording_hook):
+    "When the Orchestrator calls a sub-agent, every emitted event carries delegated_to in its payload."
     client = mock_llm(["done"])
-    agent = Agent(client, on_event=events.append)
+    agent = Agent(client)
+    await agent.run("hi", delegated_to="orchestrator.researcher")
+    print(f"event count: {len(recording_hook.events)}")
+    for e in recording_hook.events:
+        print(f"  {e.event_type}: delegated_to={e.payload.get('delegated_to')!r}")
+    assert len(recording_hook.events) >= 1
+    assert all(
+        e.payload.get("delegated_to") == "orchestrator.researcher"
+        for e in recording_hook.events
+    )
+
+
+async def test_delegated_to_cleared_after_run(mock_llm, recording_hook):
+    "A second run without delegated_to must not inherit state from a prior delegated run."
+    client = mock_llm(["done"])
+    agent = Agent(client)
+    await agent.run("hi", delegated_to="orchestrator.x")
+    recording_hook.events.clear()
+    await agent.run("plain")
+    assert all(
+        e.payload.get("delegated_to") is None for e in recording_hook.events
+    )
+
+
+async def test_recording_hook_receives_task_event(mock_llm, recording_hook):
+    client = mock_llm(["done"])
+    agent = Agent(client)
     await agent.run("my task")
-    event_types = [e["event"] for e in events]
+    event_types = [e.event_type for e in recording_hook.events]
     print(f"event types: {event_types}")
     assert "task" in event_types
 
 
-async def test_on_event_receives_action_and_observation(mock_llm):
-    events = []
+async def test_recording_hook_receives_action_and_observation(mock_llm, recording_hook):
     client = mock_llm(
         [_tool_call_response("echo", {"text": "ping"}), _final_response("pong")]
     )
-    agent = Agent(client, tools=[echo], on_event=events.append)
+    agent = Agent(client, tools=[echo])
     await agent.run("ping")
-    event_types = [e["event"] for e in events]
+    event_types = [e.event_type for e in recording_hook.events]
     print(f"event types: {event_types}")
     assert "action" in event_types
     assert "observation" in event_types
@@ -363,31 +388,29 @@ async def test_on_event_receives_action_and_observation(mock_llm):
 # --- tool error handling ---
 
 
-async def test_tool_exception_returned_as_observation(mock_llm):
-    events = []
+async def test_tool_exception_returned_as_observation(mock_llm, recording_hook):
     client = mock_llm(
         [
             _tool_call_response("boom", {"reason": "test error"}),
             _final_response("handled"),
         ]
     )
-    agent = Agent(client, tools=[boom], on_event=events.append)
+    agent = Agent(client, tools=[boom])
     result = await agent.run("do it")
     # agent must survive the tool exception and complete
     print(f"answer after tool exception: {result['answer']!r}")
     print("tool_error events:")
-    pprint.pprint([e for e in events if e["event"] == "tool_error"])
+    pprint.pprint([e for e in recording_hook.events if e.event_type == "tool_error"])
     assert result["answer"] == "handled"
-    assert any(e["event"] == "tool_error" for e in events)
+    assert any(e.event_type == "tool_error" for e in recording_hook.events)
 
 
-async def test_unknown_tool_returns_error_observation(mock_llm):
-    events = []
+async def test_unknown_tool_returns_error_observation(mock_llm, recording_hook):
     client = mock_llm([_tool_call_response("nonexistent", {}), _final_response("ok")])
-    agent = Agent(client, tools=[], on_event=events.append)
+    agent = Agent(client, tools=[])
     result = await agent.run("call unknown")
     print(f"answer after unknown tool: {result['answer']!r}")
     print("tool_error events:")
-    pprint.pprint([e for e in events if e["event"] == "tool_error"])
+    pprint.pprint([e for e in recording_hook.events if e.event_type == "tool_error"])
     assert result["answer"] == "ok"
-    assert any(e["event"] == "tool_error" for e in events)
+    assert any(e.event_type == "tool_error" for e in recording_hook.events)

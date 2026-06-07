@@ -35,6 +35,22 @@ async def delegate_to_researcher(task: str, ctx: MCPContext) -> str:
     """
     client: LLMClient = ctx.lifespan["client"]
 
+    class JsonLogHook:
+        async def emit(self, event):
+            _log.debug(
+                json.dumps(
+                    {
+                        "type": event.event_type,
+                        "payload": event.payload,
+                        "tokens": {
+                            "prompt": event.tokens.prompt_tokens,
+                            "completion": event.tokens.completion_tokens,
+                        },
+                    },
+                    default=str,
+                )
+            )
+
     agent = Agent(
         client=client,
         tools=[fetch_url],
@@ -44,8 +60,11 @@ async def delegate_to_researcher(task: str, ctx: MCPContext) -> str:
             "You are a research assistant. Fetch relevant URLs and synthesize the findings "
             "into a concise intelligence report. Always ground your answer in what you actually retrieved."
         ),
-        on_event=lambda e: _log.debug(json.dumps(e)),
+        on_step=lambda e: _log.debug(json.dumps(e, default=str)),
     )
+    from llm_framework.observability import set_hook
+
+    set_hook(JsonLogHook())
     result = await agent.run(task)
     answer = result.get("answer", "(no answer)")
     return answer[:_MAX_CHARS] + (

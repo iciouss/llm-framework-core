@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 
 from llm_framework.core import Agent, LLMClient, Orchestrator, tool
+from llm_framework.observability import set_hook
 
 
 # --- Sub-agent A: knows about the filesystem ---
@@ -46,48 +47,57 @@ def calculate(expression: str) -> str:
     return str(eval(expression))  # noqa: S307 — constrained to arithmetic chars above
 
 
-# Label each sub-agent's events so you can tell them apart in the output.
+# Label each event with the agent that emitted it. Sub-agent events carry a
+# delegated_to field in the payload (set by the Orchestrator).
 def make_step_printer(label: str):
     tag = f"[{label.ljust(10)}]"
 
-    def print_step(e: dict):
-        event = e["event"]
-        if event == "thought":
-            print(f"  {tag}[THOUGHT] {str(e.get('content', ''))[:100]}")
-        elif event == "action":
-            print(
-                f"  {tag}[ACTION]  {e.get('tool')} | {json.dumps(e.get('args', {}))[:100]}"
-            )
-        elif event == "observation":
-            print(f"  {tag}[OBS]     {str(e.get('content', ''))[:100]}")
-        elif event == "tool_error":
-            print(f"  {tag}[ERROR]   {e.get('tool')} — {e.get('error', '')}")
-        elif event == "answer":
-            print(f"  {tag}[ANSWER]  {str(e.get('content', ''))[:100]}")
+    class StepPrinter:
+        async def emit(self, event):
+            delegated = event.payload.get("delegated_to") if event.payload else None
+            who = f"<{delegated}>" if delegated else tag
+            if event.event_type == "thought":
+                print(
+                    f"  {who} [THOUGHT] {str(event.payload.get('content', ''))[:100]}"
+                )
+            elif event.event_type == "action":
+                print(
+                    f"  {who} [ACTION]  {event.payload.get('tool')} | {json.dumps(event.payload.get('args', {}))[:100]}"
+                )
+            elif event.event_type == "observation":
+                print(
+                    f"  {who} [OBS]     {str(event.payload.get('content', ''))[:100]}"
+                )
+            elif event.event_type == "tool_error":
+                print(
+                    f"  {who} [ERROR]   {event.payload.get('tool')} — {event.payload.get('error', '')}"
+                )
+            elif event.event_type == "answer":
+                print(
+                    f"  {who} [ANSWER]  {str(event.payload.get('content', ''))[:100]}"
+                )
 
-    return print_step
+    return StepPrinter()
 
 
 async def main():
+    set_hook(make_step_printer("SUPERVISOR"))
     async with LLMClient.from_env() as client:
         fs_agent = Agent(
             client=client,
             tools=[list_directory, count_files],
             system_prompt="You are a filesystem assistant. Use the tools to inspect directories.",
-            on_event=make_step_printer("FS"),
         )
 
         math_agent = Agent(
             client=client,
             tools=[calculate],
             system_prompt="You are a calculator. Only perform arithmetic. Use the calculate tool.",
-            on_event=make_step_printer("MATH"),
         )
 
         orchestrator = Orchestrator(
             client=client,
             sub_agents={"filesystem": fs_agent, "math": math_agent},
-            on_event=make_step_printer("SUPERVISOR"),
         )
 
         result = await orchestrator.run(
@@ -97,7 +107,7 @@ async def main():
         print("\n--- ANSWER ---")
         print(result["answer"])
         print(
-            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']}"
+            f"[tokens] prompt={result['prompt_tokens']} completion={result['completion_tokens']} billable={result['total_billable_tokens']}"
         )
 
 
