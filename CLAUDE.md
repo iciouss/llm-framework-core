@@ -125,6 +125,13 @@ These are non-negotiable. See `.github/copilot-instructions.md` for the parallel
 2. Declare a top-level sentinel: `try: import pkg / except ImportError: pkg = None  # type: ignore[assignment]`.
 3. Call `_require("pkg", pkg)` at instantiation or first use (not at import time). Import always succeeds; failure is deferred to use.
 
+**Adding dependencies** — never edit `pyproject.toml` to add or bump a version pin by hand. Always use `uv add`:
+- Runtime deps: `uv add <pkg>`
+- Optional extras: `uv add --optional <extra-name> <pkg>` (one extra per feature; never bundle unrelated deps)
+- Dev group: `uv add --group dev <pkg>`
+
+This keeps the recorded minimum version equal to the current latest, prevents drift between `pyproject.toml` and `uv.lock`, and avoids typo'd or stale version strings. Applies to upgrades too: `uv add --upgrade <pkg>`, don't bump a constraint in place.
+
 **Architecture**
 - Strict DAG imports. `core/` must not import from `extensions/` at runtime. Use `Protocol` + `TYPE_CHECKING` for type-only references.
 - Submodules must import from explicit submodule paths, never from the top-level package `__init__.py`. Prevents recursive execution loops.
@@ -280,7 +287,7 @@ Run through this checklist before considering work done:
 6. **README updated** — new MCP servers under "MCP Tools Servers", new agent servers under "Agent Servers", new examples in the examples table, new user-facing config vars in the "Configuration" section.
 7. **`docs/` updated** — new user-facing features get an entry in `docs/api/` and/or `docs/patterns.md`. `docs/environment-variables.md` auto-renders from `.env.example`.
 8. **Tests added** — unit tests for pure logic, integration tests for anything requiring a live LLM endpoint.
-9. **Open issues checked** — if your change addresses an issue in `issues/REVIEW_2026-06-06.md`, note the issue number in the commit body.
+9. **Open issues checked** — if your change addresses an issue in `issues/REVIEW_2026-06-06.md`, update the review file's status line. The review file is internal; commit messages don't reference it.
 10. **`CHANGELOG.md` updated** — any user-facing change (new feature, breaking change, bug fix) gets one bullet under `[Unreleased]` in the appropriate section (`Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security`). Internal refactors that don't change the public API can be skipped. Keep each bullet to one line and phrase it from the user's perspective, not the implementer's. Reference the issue number when relevant.
 
 ## Documentation Scope
@@ -319,14 +326,15 @@ Run through this checklist before considering work done:
 ```
 type(scope): lowercase imperative subject under 72 chars
 
-- bullet on what changed and why (omit if subject is sufficient)
+- bullet naming what changed
 ```
 
 - **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`.
-- **Subject:** lowercase, imperative mood, under 72 characters. Describes WHAT changed conceptually, with no specifics. Must NOT contain file names, function names, class names, or symbol names (variable/field/parameter/constant names). The body is where specifics go.
-- **Body:** only when the subject alone is not enough — short bullet points on WHAT changed (visible in the diff) and WHY it matters, not HOW it was implemented. The body is the right place for field names, function names, and other specifics the subject deliberately omits.
-- **No session-specific context:** bullets must stand on their own. Don't reference the current conversation, prior turns, decisions only the maintainer made, or rationale that isn't visible in the diff.
-- **One logical change per commit.** Never bundle unrelated changes. If you can describe a commit in one sentence without "and" or "plus also," it's well-scoped.
+- **Subject:** lowercase, imperative, under 72 chars. Conceptual only — no file paths, function names, class names, or symbol names. The body is where specifics go.
+- **Body:** omit when the subject is self-explanatory. Bullets are short noun phrases naming what changed; they do not justify the design. If a one-line diff needs three lines to explain, rewrite the subject.
+- **Trivial changes** (typo, gitignore tweak, single-line dep bump, file rename, file move): subject alone, no body.
+- **No internal references:** don't mention the review file, scratch notes, or session-specific decisions in the commit. The message should read correctly six months later with no context.
+- **One logical change per commit.** Never bundle unrelated changes.
 
 ### How to write the commit
 
@@ -338,20 +346,19 @@ Group ALL uncommitted changes into logical commits — never assume previous cha
 
 ### Proposing commits to the user
 
-When the user asks for commits, output both the `git add` and the `git commit` commands ready to copy-paste. The subject is conceptual; the body carries the specifics.
+When the user asks for commits, output both the `git add` and the `git commit` commands ready to copy-paste. Subject is conceptual; body names what changed.
+
+A typical feature commit:
 
 ```sh
 git add llm_framework/core/agent.py tests/unit/test_agent.py
 git commit -m "feat(agent): report billed token total in run output
 
 - New total_billable_tokens field equals prompt + completion
-- reasoning_tokens documented as a subset of completion
-- Closes REVIEW_2026-06-06 #1"
+- reasoning_tokens documented as a subset of completion"
 ```
 
-Note the contrast: the subject says "billed token total" (concept); the body names the field and the formula (specifics). The subject alone is enough to skim a `git log`; the body is what you read when you want to understand the change.
-
-A refactor example, same convention:
+A refactor, same convention:
 
 ```sh
 git add llm_framework/core/agent.py \
@@ -362,8 +369,19 @@ git commit -m "refactor(agent): route events through the global observability ho
 - Add delegated_to on Agent.run for caller correlation
 - Stop Orchestrator.delegate() from mutating sub-agent state
 - Add observability.print_hook() helper for examples and debugging
-- Migrate all 17 call sites: tests, integration, examples
-- Closes REVIEW_2026-06-06 #3"
+- Migrate all 17 call sites: tests, integration, examples"
+```
+
+A trivial change (subject alone, no body):
+
+```sh
+git add .gitignore
+git commit -m "chore(repo): add trailing slash to diagnostics in gitignore"
+```
+
+```sh
+git rm --cached uv.lock
+git commit -m "chore(repo): untrack uv.lock"
 ```
 
 If the split needs `git add -p`, explain why and walk through it. If a commit would leave the tree in a broken state (e.g. the source change is in commit A but the test update is in commit B), say so and bundle them.

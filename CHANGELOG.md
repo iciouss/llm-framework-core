@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RecordingHook` pytest fixture in `tests/conftest.py`.
 - `LICENSE` (MIT) and this `CHANGELOG.md`.
 - `CLAUDE.md` agent instructions and `issues/` tracker at the repo root.
+- `mypy` and `pytest-cov` added to the `dev` dependency group for CI type-checking and coverage reporting.
+- GitHub Actions CI workflow (`.github/workflows/ci.yaml`) running ruff, mypy, and unit tests on every push to `main` and on pull requests.
+- CI workflow extended with `gitleaks` (full-history secret scan, runs first to fail fast), `bandit` (Python security scan), and `deptry` (declared-dep audit, scoped to library + tests). `bandit` and `deptry` added to the `dev` group via `uv add`.
 
 ### Changed
 - `Agent` and `Orchestrator` no longer accept an `on_event` callback. Subscribe via `llm_framework.observability.set_hook()` (global) or the per-instance `on_step` parameter.
