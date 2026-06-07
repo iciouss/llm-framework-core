@@ -38,7 +38,7 @@ data/
 
 # Other files
 .understand-anything
-diagnostics
+diagnostics/
 *.diff
 .vite
 llm_framework.svg
