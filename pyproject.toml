@@ -37,11 +37,37 @@ source = "vcs"
 packages = ["llm_framework"]
 
 [dependency-groups]
-dev = ["pytest>=9.0.3", "pytest-asyncio>=1.4.0", "ruff>=0.15.15"]
+dev = [
+    "bandit>=1.9.4",
+    "deptry>=0.25.1",
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.15",
+    "types-defusedxml>=0.7.0.20260504",
+]
 
 [tool.ruff]
 target-version = "py313"
 line-length = 88
+
+[tool.mypy]
+# CI runs mypy on the library only; tests are exercised by pytest.
+# Missing stubs on third-party packages we don't control: ignore with overrides below.
+python_version = "3.13"
+files = ["llm_framework"]
+
+[[tool.mypy.overrides]]
+# sqlite-vec is a C extension with no published stubs.
+module = "sqlite_vec"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# uvicorn ships no py.typed marker; only the mcp_servers/* entry-point scripts import it.
+# Those scripts are pending a move to examples/ (REVIEW_2026-06-06 #12/#16) — revisit then.
+module = "uvicorn"
+ignore_missing_imports = true
 
 [tool.deptry.package_module_name_map]
 "python-dotenv" = "dotenv"
