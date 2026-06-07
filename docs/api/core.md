@@ -41,6 +41,23 @@ Use it to keep conversations coherent while controlling prompt growth and cost.
 
 ---
 
+## Observability
+
+The observability module is a small, dependency-free vocabulary for emitting and routing structured events from any call site.
+No I/O happens here — consumers register a hook and decide where events go (storage, format, transport are all up to the consumer).
+
+The pattern is: `emit(LLMCallEvent(...))` (or any of the typed event dataclasses) from a call site, and the global hook receives it. With no hook registered, `emit` is a no-op, so adding events never costs anything for users who don't subscribe.
+
+```python
+from llm_framework.core.observability import set_hook, print_hook
+
+set_hook(print_hook())  # events now print to stdout
+```
+
+### ::: llm_framework.core.observability
+
+---
+
 ## Decorators
 
 The decorators define how Python callables become model-callable tools.

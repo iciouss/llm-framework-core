@@ -24,8 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Orchestrator.delegate()` no longer mutates sub-agent state at call time. Sub-agent events carry `delegated_to` in the payload instead.
 - `Agent.run()` docstring now documents the token accounting contract explicitly: `completion_tokens` is OpenAI-compatible (includes reasoning); `total_billable_tokens` is the actual bill.
 - All example scripts and integration tests migrated from the `on_event=...` pattern to the new hook pattern.
+- Observability primitives moved from `llm_framework.observability` to `llm_framework.core.observability`; the old path remains as a silent backward-compat re-export.
 
 ### Fixed
 - Token accounting no longer double-counts `reasoning_tokens` as a separate billable quantity. Consumers reading `prompt_tokens + completion_tokens + reasoning_tokens` were being charged twice for reasoning tokens; the new `total_billable_tokens` field gives the correct sum.
+- Lazy `import dataclasses` inside `observability._attach_ctx` hoisted to the module-level imports.
 
 [Unreleased]: https://github.com/moniente/llm-framework/compare/v0.0.0...HEAD

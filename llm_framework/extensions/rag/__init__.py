@@ -8,8 +8,8 @@ from typing import Any, Protocol, runtime_checkable
 from llm_framework._env import load_env
 from llm_framework._optional import require as _require
 from llm_framework.core.llm import LLMClient
+from llm_framework.core.observability import RAGEvent
 from llm_framework.core.protocols import EmbeddingClientProtocol
-from llm_framework.observability import RAGEvent
 
 from ._converter import to_markdown
 

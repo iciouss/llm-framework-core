@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx
 
-from llm_framework.observability import MCPEvent
+from llm_framework.core.observability import MCPEvent
 
 log = logging.getLogger(__name__)
 

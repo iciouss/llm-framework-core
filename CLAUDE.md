@@ -62,10 +62,10 @@ Three layers, one-way dependencies (`core` never imports from `extensions`):
 llm_framework/
   _env.py              — load_env() helper; reads .env from cwd
   _optional.py         — EXTRAS_MAP + require() for optional-dep sentinels
-  observability.py     — events, hook, ContextVar — pending move into core/ (see ISSUES #10)
 
   core/                — httpx only; always available
     llm.py             — async HTTP client for OpenAI-compatible chat + embeddings
+    observability.py   — events, hook, ContextVar — emit structured events from any call site
     tools.py           — @tool decorator: type hints + docstring → JSON schema; @cached_tool LRU variant
     agent.py           — ReAct loop: chat → tool calls → observations → repeat
     history.py         — HistoryBuffer: rolling multi-turn history with token-budget trimming

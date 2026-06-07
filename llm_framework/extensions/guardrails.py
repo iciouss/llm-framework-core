@@ -3,7 +3,7 @@ import re
 import time
 from typing import Any
 
-from llm_framework.observability import GuardrailEvent
+from llm_framework.core.observability import GuardrailEvent
 
 _POLICY_SCHEMA = {
     "type": "json_schema",
