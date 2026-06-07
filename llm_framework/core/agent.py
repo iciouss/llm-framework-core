@@ -30,6 +30,7 @@ class AgentEvent(TypedDict, total=False):
     completion_tokens: int
     reasoning_tokens: int
     delegated_to: str
+    total_billable_tokens: int
 
 
 class Agent:
@@ -313,15 +314,31 @@ class Agent:
 
             if content and tool_calls:
                 await self._emit(
-                    {"event": "thought", "kind": "plan", "content": content.strip(), **tok}  # type: ignore[misc]
+                    {
+                        "event": "thought",
+                        "kind": "plan",
+                        "content": content.strip(),
+                        **tok,
+                    }  # type: ignore[misc]
                 )
 
             if not tool_calls:
-                return {"answer": content, "messages": messages, **tok}
+                return {
+                    "answer": content,
+                    "messages": messages,
+                    **tok,
+                    "total_billable_tokens": total_prompt_tokens
+                    + total_completion_tokens,
+                }
 
-            tool_messages: list[dict[str, Any]] = list(await asyncio.gather(
-                *[self._run_tool_call(tc, step, tok, auth_context) for tc in tool_calls]
-            ))
+            tool_messages: list[dict[str, Any]] = list(
+                await asyncio.gather(
+                    *[
+                        self._run_tool_call(tc, step, tok, auth_context)
+                        for tc in tool_calls
+                    ]
+                )
+            )
             messages.extend(tool_messages)
 
         await self._emit({"event": "error", "reason": "max_steps_reached", **tok})
@@ -329,6 +346,7 @@ class Agent:
             "answer": "(reached maximum steps without a final answer)",
             "messages": messages,
             **tok,
+            "total_billable_tokens": total_prompt_tokens + total_completion_tokens,
         }
 
     # --- ReAct loop ---
@@ -347,10 +365,17 @@ class Agent:
             system_prompt: Override the agent's default persona for this call only.
             prior_messages: Previous conversation turns to prepend; use with `HistoryBuffer` for multi-turn conversations.
             auth_context: An `AuthContext` identifying the caller. When combined with `auth_gate`, unauthorized tools are hidden from the LLM and rejected at execution time.
+            delegated_to: Set by the `Orchestrator` to tag this run as initiated by a parent agent. The tag appears in every emitted event payload (and in the global observability hook) so observers can correlate sub-agent activity with the delegating agent.
 
         Returns:
-            Dict with keys: `answer` (str), `messages` (list), `context_tokens` (current window size),
-            `prompt_tokens` (cumulative billing total), `completion_tokens`, `reasoning_tokens`.
+            Dict with keys:
+            - `answer` (str) — the final answer
+            - `messages` (list) — full ReAct-loop message history
+            - `context_tokens` (int) — size of the most recent request
+            - `prompt_tokens` (int) — cumulative input tokens across all iterations
+            - `completion_tokens` (int) — cumulative output tokens, INCLUDING reasoning (OpenAI-compatible)
+            - `reasoning_tokens` (int) — subset of `completion_tokens`; do NOT add to the other fields
+            - `total_billable_tokens` (int) — `prompt + completion`; the actual amount billed
         """
         system_prompt = system_prompt or self.system_prompt
         prompt = await self._apply_input_guards(prompt)

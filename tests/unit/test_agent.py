@@ -23,8 +23,16 @@ def boom(reason: str) -> str:
     raise RuntimeError(reason)
 
 
-def _tool_call_response(name: str, args: dict, call_id: str = "tc1") -> dict:
+def _tool_call_response(
+    name: str,
+    args: dict,
+    call_id: str = "tc1",
+    usage_overrides: dict | None = None,
+) -> dict:
     "Build a raw LLM response that requests a tool call."
+    usage = {"prompt_tokens": 10, "completion_tokens": 5}
+    if usage_overrides:
+        usage.update(usage_overrides)
     return {
         "choices": [
             {
@@ -40,16 +48,19 @@ def _tool_call_response(name: str, args: dict, call_id: str = "tc1") -> dict:
                 }
             }
         ],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+        "usage": usage,
     }
 
 
-def _final_response(text: str) -> dict:
+def _final_response(text: str, usage_overrides: dict | None = None) -> dict:
+    usage = {"prompt_tokens": 10, "completion_tokens": 5}
+    if usage_overrides:
+        usage.update(usage_overrides)
     return {
         "choices": [
             {"message": {"role": "assistant", "content": text, "tool_calls": None}}
         ],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+        "usage": usage,
     }
 
 
@@ -121,6 +132,80 @@ async def test_run_calls_tool_and_returns_final_answer(mock_llm):
     result = await agent.run("ping")
     print(f"LLM call count: {len(client.calls)}  answer: {result['answer']!r}")
     assert result["answer"] == "pong"
+
+
+# --- token accounting ---
+
+
+async def test_total_billable_tokens_prompt_plus_completion_only(mock_llm):
+    """reasoning_tokens is a subset of completion_tokens; billable = prompt + completion."""
+    client = mock_llm(
+        [
+            _tool_call_response(
+                "echo",
+                {"text": "x"},
+                usage_overrides={
+                    "prompt_tokens": 10,
+                    "completion_tokens": 100,
+                    "completion_tokens_details": {"reasoning_tokens": 40},
+                },
+            ),
+            _final_response("done", usage_overrides={"prompt_tokens": 0, "completion_tokens": 0}),
+        ]
+    )
+    agent = Agent(client, tools=[echo])
+    result = await agent.run("hi")
+    print(
+        f"prompt={result['prompt_tokens']} completion={result['completion_tokens']} "
+        f"reasoning={result['reasoning_tokens']} billable={result['total_billable_tokens']}"
+    )
+    assert result["prompt_tokens"] == 10
+    assert result["completion_tokens"] == 100
+    assert result["reasoning_tokens"] == 40
+    assert result["total_billable_tokens"] == 110
+
+
+async def test_total_billable_tokens_cumulative_across_iterations(mock_llm):
+    """billable is cumulative across ReAct iterations, not per-step."""
+    client = mock_llm(
+        [
+            _tool_call_response(
+                "echo",
+                {"text": "a"},
+                usage_overrides={
+                    "prompt_tokens": 10,
+                    "completion_tokens": 50,
+                    "completion_tokens_details": {"reasoning_tokens": 20},
+                },
+            ),
+            _tool_call_response(
+                "echo",
+                {"text": "b"},
+                usage_overrides={
+                    "prompt_tokens": 12,
+                    "completion_tokens": 60,
+                    "completion_tokens_details": {"reasoning_tokens": 25},
+                },
+            ),
+            _final_response(
+                "done",
+                usage_overrides={
+                    "prompt_tokens": 8,
+                    "completion_tokens": 30,
+                },
+            ),
+        ]
+    )
+    agent = Agent(client, tools=[echo])
+    result = await agent.run("multi-step")
+    print(
+        f"prompt={result['prompt_tokens']} completion={result['completion_tokens']} "
+        f"reasoning={result['reasoning_tokens']} billable={result['total_billable_tokens']}"
+    )
+    assert result["prompt_tokens"] == 10 + 12 + 8
+    assert result["completion_tokens"] == 50 + 60 + 30
+    assert result["reasoning_tokens"] == 20 + 25
+    assert result["total_billable_tokens"] == (10 + 12 + 8) + (50 + 60 + 30)
 
 
 # --- input/output guards ---
