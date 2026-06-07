@@ -214,7 +214,7 @@ The global hook is opt-in. With no hook registered, `emit()` is a no-op. Observa
 
 ## What NOT to Do
 
-This is a curated list of mistakes that have actually happened in this repo. See `issues/REVIEW_2026-06-06.md` for the full issue list with rationale.
+This is a curated list of mistakes that have actually happened in this repo. See the private review notes (in `issues/REVIEW_*.md`, gitignored) for the full issue list with rationale.
 
 - **Don't ship `tools/builtins.py`** in the library. Demo functions belong in `examples/`.
 - **Don't reach into another module's internals** to inject state (e.g., the `Orchestrator` mutating a sub-agent's `on_event`). Use the public API or the observability hook.
@@ -287,7 +287,7 @@ Run through this checklist before considering work done:
 6. **README updated** — new MCP servers under "MCP Tools Servers", new agent servers under "Agent Servers", new examples in the examples table, new user-facing config vars in the "Configuration" section.
 7. **`docs/` updated** — new user-facing features get an entry in `docs/api/` and/or `docs/patterns.md`. `docs/environment-variables.md` auto-renders from `.env.example`.
 8. **Tests added** — unit tests for pure logic, integration tests for anything requiring a live LLM endpoint.
-9. **Open issues checked** — if your change addresses an issue in `issues/REVIEW_2026-06-06.md`, update the review file's status line. The review file is internal; commit messages don't reference it.
+9. **Open issues checked** — if your change addresses an issue tracked in the private review notes (`issues/REVIEW_*.md`, gitignored), update its status line there. The review file is internal; commit messages don't reference it.
 10. **`CHANGELOG.md` updated** — any user-facing change (new feature, breaking change, bug fix) gets one bullet under `[Unreleased]` in the appropriate section (`Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security`). Internal refactors that don't change the public API can be skipped. Keep each bullet to one line and phrase it from the user's perspective, not the implementer's. Reference the issue number when relevant.
 
 ## Documentation Scope
@@ -388,7 +388,7 @@ If the split needs `git add -p`, explain why and walk through it. If a commit wo
 
 ## Open Work (High Priority)
 
-These are the top items from `issues/REVIEW_2026-06-06.md` that should be tackled before v1.0. Items #1, #3, #6, #7, and #22 are now closed — see the review file for the commit history. The remaining top priorities:
+These are the top items from the private review notes (`issues/REVIEW_*.md`, gitignored) that should be tackled before v1.0. Items #1, #3, #6, #7, and #22 are now closed — see the review file for the commit history. The remaining top priorities:
 
 1. **Decide on OIDC IdP coupling** — either commit to a specific IdP and rename, or remove the `v1` and `appid` fallbacks. (ISSUES #2)
 2. **Move `tools/` and `mcp_servers/` to `examples/`** — capture the security patterns in `docs/patterns/security-tools.md` first. (ISSUES #8, #13)
@@ -396,4 +396,4 @@ These are the top items from `issues/REVIEW_2026-06-06.md` that should be tackle
 4. **`MemoryStore` concurrency** — JSON-as-a-DB has no multi-process safety. Document the limit or swap to SQLite. (ISSUES #4)
 5. **`RAGStore` hardcoded home-dir sandbox** — make the root a constructor argument. (ISSUES #5)
 
-For the full list, see [issues/REVIEW_2026-06-06.md](issues/REVIEW_2026-06-06.md).
+For the full list, see the private review notes (in `issues/REVIEW_*.md`, gitignored).

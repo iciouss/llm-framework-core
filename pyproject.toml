@@ -65,7 +65,7 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # uvicorn ships no py.typed marker; only the mcp_servers/* entry-point scripts import it.
-# Those scripts are pending a move to examples/ (REVIEW_2026-06-06 #12/#16) — revisit then.
+# Those scripts are pending a move to examples/ — revisit then.
 module = "uvicorn"
 ignore_missing_imports = true
 

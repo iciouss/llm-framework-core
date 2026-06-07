@@ -44,3 +44,7 @@ diagnostics/
 llm_framework.svg
 .coverage
 ignore
+
+# Private review notes (kept locally for the maintainer's AI-assisted workflow,
+# not shipped with the library)
+issues/
