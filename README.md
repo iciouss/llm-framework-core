@@ -1,6 +1,9 @@
 # llm-framework
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/llm-framework)](https://pypi.org/project/llm-framework/)
+[![CI](https://img.shields.io/badge/CI-coming%20soon-lightgrey)](#)
+[![Python](https://img.shields.io/badge/python-3.13%2B-blue)](https://www.python.org/downloads/)
 
 Minimal Python library for building LLM-powered agents. Designed for a low dependency footprint and supply chain safety.
 
