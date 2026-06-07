@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `total_billable_tokens` field on `Agent.run()` result. Resolves the previous ambiguity in the `prompt + completion + reasoning` math: `reasoning_tokens` is a subset of `completion_tokens` and is not additive.
 - `observability.print_hook()` helper for examples and ad-hoc debugging.
 - `RecordingHook` pytest fixture in `tests/conftest.py`.
+- `CONTRIBUTING.md` and `SECURITY.md` at the repo root, covering setup, test commands, pre-PR checklist, commit format, supported versions, the reporting process, and a 90-day disclosure timeline.
 - `LICENSE` (MIT) and this `CHANGELOG.md`.
 - `CLAUDE.md` agent instructions and `issues/` tracker at the repo root.
 - `mypy` and `pytest-cov` added to the `dev` dependency group for CI type-checking and coverage reporting.
