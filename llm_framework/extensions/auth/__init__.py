@@ -56,6 +56,7 @@ __all__ = [
     "AuthProvider",
     "FilePolicyBackend",
     "MemoryPolicyBackend",
+    "OIDCAuthProvider",
     "PolicyBackend",
     "StaticAuthProvider",
 ]

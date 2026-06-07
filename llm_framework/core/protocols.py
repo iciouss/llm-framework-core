@@ -14,16 +14,7 @@ Why Protocols and not ABCs:
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
-
-if TYPE_CHECKING:
-    # Imported only for the type checker. At runtime these names are never
-    # resolved, so `core/` stays independent of `extensions/`. The concrete
-    # types are NOT used in Protocol method signatures — doing so would
-    # require every caller to pass the concrete type, defeating the
-    # purpose of structural typing. The Protocols reference each other.
-    from llm_framework.extensions.auth import AuthContext, AuthGate
-
+from typing import Any, Protocol, runtime_checkable
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -61,13 +52,13 @@ class AuthGateProtocol(Protocol):
     def filter_schemas(
         self,
         schemas: list[dict[str, Any]],
-        context: "AuthContextProtocol | None",
+        context: AuthContextProtocol | None,
     ) -> list[dict[str, Any]]: ...
 
     def authorize(
         self,
         tool_name: str,
-        context: "AuthContextProtocol | None",
+        context: AuthContextProtocol | None,
     ) -> bool: ...
 
 

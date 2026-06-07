@@ -123,11 +123,12 @@ class MCPClient:
         await self._stdio_notify("notifications/initialized")
 
     async def _stdio_reader(self) -> None:
+        process = self._process
+        if process is None or process.stdout is None:
+            raise RuntimeError("stdio reader started before subprocess connected")
         try:
-            assert self._process is not None
-            assert self._process.stdout is not None
             while True:
-                line = await self._process.stdout.readline()
+                line = await process.stdout.readline()
                 if not line:
                     break
                 try:
@@ -152,23 +153,25 @@ class MCPClient:
         return self._id_counter
 
     async def _stdio_notify(self, method: str, params: dict | None = None) -> None:
-        assert self._process is not None
-        assert self._process.stdin is not None
+        process = self._process
+        if process is None or process.stdin is None:
+            raise RuntimeError("stdio notify before subprocess connected")
         msg = json.dumps({"jsonrpc": "2.0", "method": method, "params": params or {}})
-        self._process.stdin.write((msg + "\n").encode())
-        await self._process.stdin.drain()
+        process.stdin.write((msg + "\n").encode())
+        await process.stdin.drain()
 
     async def _stdio_call(self, method: str, params: dict) -> dict:
-        assert self._process is not None
-        assert self._process.stdin is not None
+        process = self._process
+        if process is None or process.stdin is None:
+            raise RuntimeError("stdio call before subprocess connected")
         req_id = self._next_id()
         fut = asyncio.get_running_loop().create_future()
         self._pending[req_id] = fut
         msg = json.dumps(
             {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
         )
-        self._process.stdin.write((msg + "\n").encode())
-        await self._process.stdin.drain()
+        process.stdin.write((msg + "\n").encode())
+        await process.stdin.drain()
         return await fut
 
     async def _stdio_close(self) -> None:

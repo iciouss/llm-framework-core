@@ -44,7 +44,10 @@ def to_markdown(path: Path) -> str:
     if suffix == ".xml":
         try:
             tree = ET.parse(path)
-            return " ".join(tree.getroot().itertext())
+            root = tree.getroot()
+            if root is None:
+                return ""
+            return " ".join(root.itertext())
         except ET.ParseError as exc:
             log.warning("XML parse error in %s: %s", path.name, exc)
             return ""

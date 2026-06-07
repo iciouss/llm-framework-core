@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from llm_framework._env import load_env
 from llm_framework._optional import require as _require
@@ -13,22 +13,12 @@ from llm_framework.observability import RAGEvent
 
 from ._converter import to_markdown
 
-if TYPE_CHECKING:
-    from semantic_text_splitter import MarkdownSplitter as _MarkdownSplitterType
-
-    from llm_framework.extensions.rag.vector_store.qdrant import (
-        QdrantBackend as _QdrantType,
-    )
-    from llm_framework.extensions.rag.vector_store.sqlite import (
-        SqliteVecBackend as _SqliteType,
-    )
-
 log = logging.getLogger(__name__)
 
 try:
     from semantic_text_splitter import MarkdownSplitter
 except ImportError:
-    MarkdownSplitter = None  # type: ignore[misc]
+    MarkdownSplitter = None  # type: ignore[misc,assignment]
 
 try:
     from llm_framework.extensions.rag.vector_store.sqlite import SqliteVecBackend

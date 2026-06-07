@@ -3,7 +3,7 @@ import dataclasses
 import inspect
 import json
 import sys
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from llm_framework._optional import require as _require
@@ -14,7 +14,7 @@ try:
     from fastapi.responses import StreamingResponse
 except ImportError:
     FastAPI = None  # type: ignore[assignment,misc]
-    Request = None  # type: ignore[assignment]
+    Request = None  # type: ignore[assignment,misc]
     StreamingResponse = None  # type: ignore[assignment,misc]
 
 _PROTO_VERSION = "2025-03-26"

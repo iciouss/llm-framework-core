@@ -32,7 +32,7 @@ class AgentEvent(TypedDict, total=False):
     prompt_tokens: int
     completion_tokens: int
     reasoning_tokens: int
-    delegated_to: str
+    delegated_to: str | None
     total_billable_tokens: int
 
 

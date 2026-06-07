@@ -72,4 +72,4 @@ class QdrantBackend:
         response = await self.db.query_points(
             collection_name=self.collection_name, query=query_vector, limit=limit
         )
-        return [hit.payload for hit in response.points]
+        return [p for p in (hit.payload for hit in response.points) if p is not None]

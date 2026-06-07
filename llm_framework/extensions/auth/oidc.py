@@ -5,11 +5,13 @@ import hashlib
 import logging
 import os
 import secrets
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
 
 from llm_framework._optional import require as _require
+
 from ._context import AuthContext
 
 log = logging.getLogger(__name__)
@@ -18,8 +20,8 @@ try:
     import jwt
     from jwt import PyJWK
 except ImportError:
-    jwt = None  # type: ignore[assignment]
-    PyJWK = None  # type: ignore[assignment]
+    jwt = None  # type: ignore[assignment,misc]
+    PyJWK = None  # type: ignore[assignment,misc]
 
 
 class OIDCAuthProvider:
@@ -92,7 +94,7 @@ class OIDCAuthProvider:
         }
         return config["authorization_endpoint"] + "?" + urlencode(params), code_verifier
 
-    async def _fetch_signing_key(self, jwks_uri: str, kid: str | None) -> object | None:
+    async def _fetch_signing_key(self, jwks_uri: str, kid: str | None) -> Any | None:
         "Fetch JWKS from uri and return the matching signing key, or None if not found."
         async with httpx.AsyncClient() as client:
             resp = await client.get(jwks_uri)
