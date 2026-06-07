@@ -9,11 +9,24 @@ description = "Minimal Python library for building LLM-powered agents with a low
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.13"
+keywords = ["llm", "agent", "mcp", "rag", "openai-compatible"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "defusedxml>=0.7.1",
     "httpx>=0.28.1",
     "python-dotenv>=1.2.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/iciouss/llm-framework-core"
+Documentation = "https://iciouss.github.io/llm-framework-core/"
+Issues = "https://github.com/iciouss/llm-framework-core/issues"
 
 [project.optional-dependencies]
 # Library extras — extend the core library; install only what you need

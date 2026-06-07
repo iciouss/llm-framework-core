@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All example scripts and integration tests migrated from the `on_event=...` pattern to the new hook pattern.
 - Observability primitives moved from `llm_framework.observability` to `llm_framework.core.observability`; the old path remains as a silent backward-compat re-export.
 - The internal `AgentEvent` TypedDict was removed from `core/agent.py`. The agent loop now constructs `AgentStepEvent` directly via a private helper, eliminating the dual event representation.
+- `pyproject.toml` now declares `classifiers`, `keywords`, and a `[project.urls]` block (Homepage, Documentation, Issues) so the package renders correctly on PyPI.
 
 
 ### Fixed
