@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any
 
-from llm_framework.observability import AgentStepEvent, TokenUsage
-from llm_framework.observability import emit as _obs_emit
+from llm_framework.core.observability import AgentStepEvent, TokenUsage
+from llm_framework.core.observability import emit as _obs_emit
 
 from .protocols import AuthContextProtocol, AuthGateProtocol, LLMClientProtocol
 
@@ -14,26 +15,6 @@ if TYPE_CHECKING:
     pass
 
 _MAX_CHARS = 20_000
-
-
-class AgentEvent(TypedDict, total=False):
-    "Structured event dict emitted by the agent at each step of the ReAct loop."
-
-    event: str
-    prompt: str
-    kind: str
-    content: str
-    step: int
-    tool: str
-    args: dict
-    error: str
-    reason: str
-    context_tokens: int
-    prompt_tokens: int
-    completion_tokens: int
-    reasoning_tokens: int
-    delegated_to: str | None
-    total_billable_tokens: int
 
 
 class Agent:
@@ -103,43 +84,32 @@ class Agent:
 
     # --- event emission ---
 
-    async def _emit(self, event: AgentEvent) -> None:
+    async def _emit(self, event: AgentStepEvent) -> None:
         # tag sub-agent events with the delegating agent name (set by Orchestrator)
         if getattr(self, "_current_delegated_to", None):
-            event = {**event, "delegated_to": self._current_delegated_to}
-        typed_event = self._build_typed_event(event)
+            event = dataclasses.replace(
+                event,
+                payload={**event.payload, "delegated_to": self._current_delegated_to},
+            )
         if self.on_step:
-            result = self.on_step(typed_event)
+            result = self.on_step(event)
             if asyncio.iscoroutine(result):
                 await result
-        await _obs_emit(typed_event)
+        await _obs_emit(event)
 
-    @staticmethod
-    def _build_typed_event(event: AgentEvent) -> AgentStepEvent:
-        """Convert the raw agent event dict into a typed AgentStepEvent."""
-        tok = TokenUsage(
-            prompt_tokens=event.get("prompt_tokens", 0),
-            completion_tokens=event.get("completion_tokens", 0),
-            reasoning_tokens=event.get("reasoning_tokens", 0),
-            context_tokens=event.get("context_tokens", 0),
-        )
+    def _step_event(
+        self,
+        event_type: str,
+        payload: dict,
+        *,
+        step: int = 0,
+        tokens: TokenUsage | None = None,
+    ) -> AgentStepEvent:
         return AgentStepEvent(
-            event_type=event.get("event", ""),
-            step=event.get("step", 0),
-            payload={
-                k: v
-                for k, v in event.items()
-                if k
-                not in (
-                    "event",
-                    "step",
-                    "prompt_tokens",
-                    "completion_tokens",
-                    "reasoning_tokens",
-                    "context_tokens",
-                )
-            },
-            tokens=tok,
+            event_type=event_type,
+            step=step,
+            payload=payload,
+            tokens=tokens or TokenUsage(),
         )
 
     # --- tool validation and execution ---
@@ -165,14 +135,14 @@ class Agent:
         # registry lookup
         if name not in self.registry:
             error = f"Tool '{name}' not found."
-            await self._emit({"event": "tool_error", "tool": name, "error": error})
+            await self._emit(self._step_event("tool_error", {"tool": name, "error": error}))
             return f"Error: {error}"
 
         # argument validation against the tool's JSON schema
         validation_error = self._validate_args(name, args)
         if validation_error:
             await self._emit(
-                {"event": "tool_error", "tool": name, "error": validation_error}
+                self._step_event("tool_error", {"tool": name, "error": validation_error})
             )
             return f"Error: {validation_error}"
 
@@ -180,12 +150,10 @@ class Agent:
         if self.auth_gate and not self.auth_gate.authorize(name, auth_context):
             error = f"Access denied: '{name}' is not permitted for this user."
             await self._emit(
-                {
-                    "event": "tool_error",
-                    "tool": name,
-                    "error": error,
-                    "reason": "access_denied",
-                }
+                self._step_event(
+                    "tool_error",
+                    {"tool": name, "error": error, "reason": "access_denied"},
+                )
             )
             return f"Error: {error}"
 
@@ -195,14 +163,14 @@ class Agent:
         )
         if needs_approval:
             await self._emit(
-                {"event": "waiting_for_approval", "tool": name, "args": args}
+                self._step_event("waiting_for_approval", {"tool": name, "args": args})
             )
             approved = self.approval_callback(name, args)  # type: ignore[misc]
             if asyncio.iscoroutine(approved):
                 approved = await approved
             if not approved:
                 error = f"Tool '{name}' was denied by the approval callback."
-                await self._emit({"event": "tool_error", "tool": name, "error": error})
+                await self._emit(self._step_event("tool_error", {"tool": name, "error": error}))
                 return f"Error: {error}"
 
         # execution — supports both sync and async tools
@@ -220,14 +188,14 @@ class Agent:
             return result
         except Exception as e:
             error = str(e)
-            await self._emit({"event": "tool_error", "tool": name, "error": error})
+            await self._emit(self._step_event("tool_error", {"tool": name, "error": error}))
             return f"Error executing {name}: {error}"
 
     async def _run_tool_call(
         self,
         tc: dict[str, Any],
         step: int,
-        tok: AgentEvent,
+        tok: TokenUsage,
         auth_context: AuthContextProtocol | None = None,
     ) -> dict[str, Any]:
         # unpack the LLM's tool call request
@@ -236,7 +204,11 @@ class Agent:
             fn_args = json.loads(tc["function"]["arguments"])
         except json.JSONDecodeError as exc:
             error = f"Malformed tool arguments from model: {exc}"
-            await self._emit({"event": "tool_error", "tool": fn_name, "error": error})
+            await self._emit(
+                self._step_event(
+                    "tool_error", {"tool": fn_name, "error": error}, step=step + 1, tokens=tok
+                )
+            )
             return {
                 "role": "tool",
                 "tool_call_id": tc["id"],
@@ -244,23 +216,21 @@ class Agent:
             }
         # announce the action before executing so the event fires even if the tool raises
         await self._emit(
-            {
-                "event": "action",
-                "step": step + 1,
-                "tool": fn_name,
-                "args": fn_args,
-                **tok,
-            }
+            self._step_event(
+                "action",
+                {"tool": fn_name, "args": fn_args},
+                step=step + 1,
+                tokens=tok,
+            )
         )
         observation = await self._execute_tool(fn_name, fn_args, auth_context)
         await self._emit(
-            {
-                "event": "observation",
-                "step": step + 1,
-                "tool": fn_name,
-                "content": observation,
-                **tok,
-            }
+            self._step_event(
+                "observation",
+                {"tool": fn_name, "content": observation},
+                step=step + 1,
+                tokens=tok,
+            )
         )
         # return in the format the OpenAI messages API expects for tool results
         return {
@@ -301,12 +271,7 @@ class Agent:
         messages: list[dict[str, Any]],
         auth_context: AuthContextProtocol | None,
     ) -> dict[str, Any]:
-        tok: AgentEvent = {
-            "context_tokens": 0,
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "reasoning_tokens": 0,
-        }
+        tok = TokenUsage()
         total_prompt_tokens = 0
         total_completion_tokens = 0
         total_reasoning_tokens = 0
@@ -333,7 +298,7 @@ class Agent:
             total_reasoning_tokens += usage.get("completion_tokens_details", {}).get(
                 "reasoning_tokens", 0
             )
-            tok = AgentEvent(
+            tok = TokenUsage(
                 context_tokens=context_tokens,
                 prompt_tokens=total_prompt_tokens,
                 completion_tokens=total_completion_tokens,
@@ -355,12 +320,12 @@ class Agent:
             )
             if reasoning:
                 await self._emit(
-                    {
-                        "event": "thought",
-                        "kind": "reasoning",
-                        "content": reasoning.strip(),
-                        **tok,
-                    }  # type: ignore[misc]
+                    self._step_event(
+                        "thought",
+                        {"kind": "reasoning", "content": reasoning.strip()},
+                        step=step + 1,
+                        tokens=tok,
+                    )
                 )
 
             content = msg.get("content") or ""
@@ -368,19 +333,22 @@ class Agent:
 
             if content and tool_calls:
                 await self._emit(
-                    {
-                        "event": "thought",
-                        "kind": "plan",
-                        "content": content.strip(),
-                        **tok,
-                    }  # type: ignore[misc]
+                    self._step_event(
+                        "thought",
+                        {"kind": "plan", "content": content.strip()},
+                        step=step + 1,
+                        tokens=tok,
+                    )
                 )
 
             if not tool_calls:
                 return {
                     "answer": content,
                     "messages": messages,
-                    **tok,
+                    "context_tokens": context_tokens,
+                    "prompt_tokens": total_prompt_tokens,
+                    "completion_tokens": total_completion_tokens,
+                    "reasoning_tokens": total_reasoning_tokens,
                     "total_billable_tokens": total_prompt_tokens
                     + total_completion_tokens,
                 }
@@ -395,11 +363,16 @@ class Agent:
             )
             messages.extend(tool_messages)
 
-        await self._emit({"event": "error", "reason": "max_steps_reached", **tok})
+        await self._emit(
+            self._step_event("error", {"reason": "max_steps_reached"}, tokens=tok)
+        )
         return {
             "answer": "(reached maximum steps without a final answer)",
             "messages": messages,
-            **tok,
+            "context_tokens": context_tokens,
+            "prompt_tokens": total_prompt_tokens,
+            "completion_tokens": total_completion_tokens,
+            "reasoning_tokens": total_reasoning_tokens,
             "total_billable_tokens": total_prompt_tokens + total_completion_tokens,
         }
 
@@ -444,20 +417,22 @@ class Agent:
         # tag every event this run emits with delegated_to (cleared on exit)
         self._current_delegated_to = delegated_to
         try:
-            await self._emit({"event": "task", "prompt": prompt})
+            await self._emit(self._step_event("task", {"prompt": prompt}))
             result = await self._run_loop(messages, auth_context)
 
             answer = str(result.get("answer", ""))
             answer = await self._apply_output_guards(answer)
             result["answer"] = answer
 
-            tok_for_emit: AgentEvent = {
-                "context_tokens": int(result.get("context_tokens", 0)),
-                "prompt_tokens": int(result.get("prompt_tokens", 0)),
-                "completion_tokens": int(result.get("completion_tokens", 0)),
-                "reasoning_tokens": int(result.get("reasoning_tokens", 0)),
-            }
-            await self._emit({"event": "answer", "content": answer, **tok_for_emit})
+            tok_for_emit = TokenUsage(
+                context_tokens=int(result.get("context_tokens", 0)),
+                prompt_tokens=int(result.get("prompt_tokens", 0)),
+                completion_tokens=int(result.get("completion_tokens", 0)),
+                reasoning_tokens=int(result.get("reasoning_tokens", 0)),
+            )
+            await self._emit(
+                self._step_event("answer", {"content": answer}, tokens=tok_for_emit)
+            )
             return result
         finally:
             self._current_delegated_to = None
