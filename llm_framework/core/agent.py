@@ -275,8 +275,10 @@ class Agent:
         total_prompt_tokens = 0
         total_completion_tokens = 0
         total_reasoning_tokens = 0
+        context_tokens = 0
 
-        for step in range(self.max_steps):
+        step = 0
+        while step < self.max_steps:
             if self.before_iteration_callback:
                 cb_result = self.before_iteration_callback(step, self.max_steps)
                 if asyncio.iscoroutine(cb_result):
@@ -362,6 +364,7 @@ class Agent:
                 )
             )
             messages.extend(tool_messages)
+            step += 1
 
         await self._emit(
             self._step_event("error", {"reason": "max_steps_reached"}, tokens=tok)

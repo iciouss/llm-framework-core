@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `Agent._run_loop` now uses a `while` loop so mutations to `max_steps` inside `before_iteration_callback` actually extend the run. Previously `range(self.max_steps)` was evaluated once at loop start, making runtime extension a no-op.
+
 ### Added
 - Observability primitives: `emit`, `set_hook`, `on_step`, `ObservabilityContext`, and a typed event vocabulary (LLMCallEvent, EmbeddingEvent, RAGEvent, MCPEvent, GuardrailEvent, AgentStepEvent, OrchestratorEvent, PipelineStepEvent) for structured event emission from core call sites.
 - `Agent.run(delegated_to=...)` parameter for caller correlation across `Orchestrator` sub-agents. Sub-agent events carry the delegating agent's name in their payload.
