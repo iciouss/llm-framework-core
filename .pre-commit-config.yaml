@@ -1,0 +1,10 @@
+# Block relative path sources in [tool.uv.sources].
+# See ../WORKFLOW.md for why. Run `uv tool run pre-commit install` to activate.
+repos:
+  - repo: local
+    hooks:
+      - id: no-relative-path-sources
+        name: Block ../ path refs in [tool.uv.sources]
+        entry: bash -c 'git diff --cached pyproject.toml | grep -E "^\+.*path\s*=\s*\"\.\." && { echo "✗ relative path source detected — use uv pip install -e, not uv add"; exit 1; } || exit 0'
+        language: system
+        files: '^pyproject\.toml$'
