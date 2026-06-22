@@ -1,0 +1,27 @@
+name: Auto-tag
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  # Serialize tag creation per ref so two rapid pushes don't race on the same tag.
+  group: auto-tag-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # required for hatch-vcs and for git describe to see ancestor tags
+
+      - name: Compute and push version tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/auto-tag.sh "${{ github.ref_name }}"

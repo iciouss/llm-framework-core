@@ -263,6 +263,18 @@ Workflow reminders (not in the skill — always true):
 - `extensions/__init__.py` re-exports the public surface of each optional subsystem. New extension classes get added there; otherwise they are reachable only via explicit submodule paths.
 - Do not commit `.env`, `*.log`, `data/`. `.gitignore` covers these.
 
+## Release flow
+
+Every push to `main` runs `.github/workflows/auto-tag.yaml`, which computes the next version and pushes the tag via `git push`. The tag push triggers `release.yaml`, which builds the wheel + sdist via `uv build` and attaches them to a GitHub Release (no PyPI publish). Release notes are auto-generated from commit subjects by `softprops/action-gh-release@v2`.
+
+The version bump follows conventional commits:
+- `[release: major]` / `[release: minor]` / `[release: patch]` footers override auto-detection.
+- Subjects ending in `!:` or bodies containing `BREAKING CHANGE:` trigger a major bump.
+- `feat:` subjects trigger a minor bump.
+- Anything else triggers a patch bump.
+
+Add `[skip release]` or `[skip ci]` to any commit body to suppress tagging for that push. To ship a specific version out-of-band, push the tag manually: `git tag vX.Y.Z && git push origin vX.Y.Z`. The wheel version is read from the tag at build time by `hatch-vcs` (`pyproject.toml` `[tool.hatch.version] source = "vcs"`).
+
 ## Open Work (v1.0 gate)
 
 Items from the private review notes (`issues/REVIEW_*.md`, gitignored) that should be tackled before v1.0:
