@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+  repository_dispatch:
+    types: [release]
 
 jobs:
   build-and-release:
@@ -11,8 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
+      - name: Resolve version
+        # Pick up the version from whichever trigger fired this workflow.
+        # repository_dispatch carries it in client_payload; tag pushes use the tag name.
+        id: version
+        run: |
+          v="${{ github.event.client_payload.version }}"
+          if [ -z "$v" ]; then v="${{ github.ref_name }}"; fi
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         # fetch-depth: 0 is important for hatch-vcs to read the git tags correctly
         uses: actions/checkout@v4
@@ -33,7 +46,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Release ${{ github.ref_name }}
+          name: Release ${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: |
             dist/*.whl

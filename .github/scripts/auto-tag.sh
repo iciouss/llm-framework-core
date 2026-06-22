@@ -77,17 +77,22 @@ version="${major}.${minor}.${patch}"
 tag="v${version}"
 
 # Idempotency: skip if the tag already exists on the remote.
-if git ls-remote --tags origin | grep -qF "refs/tags/${tag}"; then
+if gh api "repos/${gh_repo}/git/refs/tags/${tag}" >/dev/null 2>&1; then
   echo "Tag ${tag} already exists on remote; skipping."
   exit 0
 fi
 
-# Create the tag locally and push it. The push fires the `push: tags: v*`
-# trigger on .github/workflows/release.yaml, which builds the wheel and
-# attaches it to the GitHub Release. hatch-vcs reads the version from this
-# tag at build time.
+# Create the tag via the GitHub API. Tags created via the API don't reliably
+# fire the `push: tags: v*` workflow event, so we also dispatch a `release`
+# repository event to manually trigger .github/workflows/release.yaml.
+# hatch-vcs reads the version from this tag at build time.
 sha=$(git rev-parse HEAD)
-git tag "${tag}" "${sha}"
-git push origin "refs/tags/${tag}"
+gh api -X POST "repos/${gh_repo}/git/refs" \
+  -f ref="refs/tags/${tag}" \
+  -f sha="${sha}"
+gh api -X POST "repos/${gh_repo}/dispatches" \
+  -f event_type=release \
+  -f "client_payload[version]=${tag}" \
+  -f "client_payload[sha]=${sha}"
 
 echo "Tagged: ${tag} (bump: ${bump}, base: ${latest})"
