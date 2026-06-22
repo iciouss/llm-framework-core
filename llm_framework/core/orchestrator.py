@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Callable
 from typing import Any
 
 from llm_framework.core.observability import OrchestratorEvent, emit
@@ -24,6 +25,7 @@ class Orchestrator:
         max_tokens: int = 4096,
         max_retries: int = 3,
         history_max_tokens: int = 8000,
+        on_event: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         """
         Args:
@@ -33,7 +35,9 @@ class Orchestrator:
             max_tokens: Maximum tokens per supervisor response (default 4096).
             max_retries: Retry attempts on transient API errors forwarded to the supervisor agent (default 3).
             history_max_tokens: Token budget for the supervisor history buffer (default 8000).
+            on_event: Optional sync callable invoked for each per-delegation event. Receives a dict with shape `{"event": str, "sub_agent_id": str | None, "payload": dict}`. Callback exceptions are swallowed; observability never breaks a run.
         """
+        self._on_event = on_event
         agents_list = ", ".join(sub_agents.keys())
 
         # binds sub_agents in closure without module-level state
@@ -43,26 +47,24 @@ class Orchestrator:
             if agent_name not in sub_agents:
                 return f"Unknown agent '{agent_name}'. Available: {agents_list}"
             agent = sub_agents[agent_name]
-            with contextlib.suppress(Exception):
-                await emit(
-                    OrchestratorEvent(
-                        event_type="delegated",
-                        sub_agent_id=agent_name,
-                        payload={"task_preview": task[:200]},
-                    )
+            await self._fire(
+                OrchestratorEvent(
+                    event_type="delegated",
+                    sub_agent_id=agent_name,
+                    payload={"task_preview": task[:200]},
                 )
+            )
             # pass delegated_to so the sub-agent tags its events with the orchestrator as caller
             result = await agent.run(task, delegated_to=f"orchestrator.{agent_name}")
-            with contextlib.suppress(Exception):
-                await emit(
-                    OrchestratorEvent(
-                        event_type="delegation_finished",
-                        sub_agent_id=agent_name,
-                        payload={
-                            "answer_preview": (result or {}).get("answer", "")[:200]
-                        },
-                    )
+            await self._fire(
+                OrchestratorEvent(
+                    event_type="delegation_finished",
+                    sub_agent_id=agent_name,
+                    payload={
+                        "answer_preview": (result or {}).get("answer", "")[:200]
+                    },
                 )
+            )
             return str(result.get("answer", "(no answer)"))
 
         self._system_prompt = (
@@ -79,19 +81,34 @@ class Orchestrator:
         # retains supervisor context across multiple run() calls
         self._history = HistoryBuffer(max_tokens=history_max_tokens)
 
+    async def _fire(self, event: OrchestratorEvent) -> None:
+        "Fan out an event to the global observability hook and the per-instance on_event callback."
+        with contextlib.suppress(Exception):
+            await emit(event)
+        cb = self._on_event
+        if cb is None:
+            return
+        with contextlib.suppress(Exception):
+            cb(
+                {
+                    "event": event.event_type,
+                    "sub_agent_id": event.sub_agent_id,
+                    "payload": dict(event.payload),
+                }
+            )
+
     async def run(
         self,
         prompt: str,
         system_prompt: str | None = None,
         auth_context: AuthContextProtocol | None = None,
     ) -> dict[str, Any]:
-        with contextlib.suppress(Exception):
-            await emit(
-                OrchestratorEvent(
-                    event_type="supervisor_started",
-                    payload={"prompt_preview": prompt[:200]},
-                )
+        await self._fire(
+            OrchestratorEvent(
+                event_type="supervisor_started",
+                payload={"prompt_preview": prompt[:200]},
             )
+        )
         try:
             result = await self._history.run(
                 self._agent,
@@ -100,19 +117,17 @@ class Orchestrator:
                 auth_context=auth_context,
             )
         except Exception as exc:
-            with contextlib.suppress(Exception):
-                await emit(
-                    OrchestratorEvent(
-                        event_type="supervisor_errored",
-                        payload={"error": str(exc)[:200]},
-                    )
-                )
-            raise
-        with contextlib.suppress(Exception):
-            await emit(
+            await self._fire(
                 OrchestratorEvent(
-                    event_type="supervisor_finished",
-                    payload={"answer_preview": (result or {}).get("answer", "")[:200]},
+                    event_type="supervisor_errored",
+                    payload={"error": str(exc)[:200]},
                 )
             )
+            raise
+        await self._fire(
+            OrchestratorEvent(
+                event_type="supervisor_finished",
+                payload={"answer_preview": (result or {}).get("answer", "")[:200]},
+            )
+        )
         return result
