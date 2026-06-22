@@ -44,10 +44,13 @@ jobs:
         run: uv build
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Release ${{ steps.version.outputs.version }}
-          generate_release_notes: true
-          files: |
-            dist/*.whl
-            dist/*.tar.gz
+        env:
+          # gh reads GH_TOKEN. On manual tag pushes github.ref_name is the
+          # tag; on repository_dispatch it's "main", so the Resolve version
+          # step above provides the correct value via the env-passed output.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.version }}" \
+            dist/*.whl dist/*.tar.gz \
+            --title "Release ${{ steps.version.outputs.version }}" \
+            --generate-notes
