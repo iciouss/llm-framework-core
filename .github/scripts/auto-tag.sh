@@ -76,6 +76,8 @@ esac
 version="${major}.${minor}.${patch}"
 tag="v${version}"
 
+gh_repo=$(git config --get remote.origin.url | sed -E 's#^(git@github\.com:|https://github\.com/)##; s#\.git$##')
+
 # Idempotency: skip if the tag already exists on the remote.
 if gh api "repos/${gh_repo}/git/refs/tags/${tag}" >/dev/null 2>&1; then
   echo "Tag ${tag} already exists on remote; skipping."
