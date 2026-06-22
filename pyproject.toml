@@ -34,14 +34,8 @@ mcp = ["fastapi>=0.115.0"]
 rag = ["pypdf>=6.12.2", "semantic-text-splitter>=0.30.1", "sqlite-vec>=0.1.9", "defusedxml>=0.7.1"]
 qdrant = ["qdrant-client>=1.17.1"]
 oidc = ["PyJWT[crypto]>=2.9.0"]
-# Server entry-point scripts (knowledge-server, memory-server)
-server = ["uvicorn>=0.34.0", "llm-framework[mcp]"]
 # Full-featured library install; recommended for most users
 std = ["llm-framework[rag,oidc]"]
-
-[project.scripts]
-knowledge-server = "llm_framework.mcp_servers.knowledge_server:main"
-memory-server = "llm_framework.mcp_servers.memory_server:main"
 
 [tool.hatch.version]
 source = "vcs"
@@ -74,12 +68,6 @@ files = ["llm_framework"]
 [[tool.mypy.overrides]]
 # sqlite-vec is a C extension with no published stubs.
 module = "sqlite_vec"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-# uvicorn ships no py.typed marker; only the mcp_servers/* entry-point scripts import it.
-# Those scripts are pending a move to examples/ — revisit then.
-module = "uvicorn"
 ignore_missing_imports = true
 
 [tool.deptry.package_module_name_map]

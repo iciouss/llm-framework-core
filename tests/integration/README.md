@@ -29,7 +29,7 @@ uv run pytest tests/integration/test_guardrails_live.py -v
 | File | What it exercises |
 |---|---|
 | `test_guardrails_live.py` | `llm_guard()` with a real LLM evaluating content policy |
-| `test_memory_live.py` | Agent + memory MCP server end-to-end (spawns `memory-server`) |
+| `test_memory_live.py` | Agent + memory MCP server end-to-end (spawns `memory-server` from `examples/`) |
 | `test_orchestrator_live.py` | Multi-agent orchestrator delegating between specialists |
 | `test_rag_live.py` | RAG store ingestion + search + knowledge MCP server |
 | `test_structured_output_live.py` | Structured JSON extraction via `response_format` |

@@ -1,7 +1,7 @@
 import pytest
 
-import llm_framework.tools.filesystem as fs_module
-from llm_framework.tools.filesystem import (
+import examples.tools.filesystem as fs_module
+from examples.tools.filesystem import (
     file_info,
     list_directory,
     read_file,

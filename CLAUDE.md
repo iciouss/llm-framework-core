@@ -11,10 +11,8 @@ Minimal Python library for building LLM-powered agents. Wrapped by [`llm-framewo
   - `_optional.py` — `EXTRAS_MAP` + `require()` for optional-dep sentinels
   - `core/` — httpx + dotenv + defusedxml only; always available
   - `extensions/` — optional; install only what you need via extras
-  - `tools/` — `@tool`-decorated callables shipped in the lib
-  - `mcp_servers/` — `@mcp.tool()` servers; entry-point scripts
 - `tests/` — `unit/`, `integration/`, `test_packaging.py`
-- `examples/` — runnable demos (`basics/`, `chats/`, `specialized_agents/`)
+- `examples/` — runnable demos (`basics/`, `chats/`, `specialized_agents/`, plus `tools/` and `mcp_servers/` reference implementations)
 - `tools/diagnose.sh` — diagnostic toolchain (ruff, bandit, radon, mypy, deptry, pytest-cov, pydeps)
 - `docs/` — mkdocs site (`docs/api/`, `docs/patterns.md`, `docs/environment-variables.md`)
 
@@ -27,7 +25,6 @@ uv venv && source .venv/bin/activate
 uv pip install -e ".[std]"            # core + rag + oidc (recommended)
 uv pip install -e ".[mcp]"            # + fastapi (MCP server HTTP transport)
 uv pip install -e ".[qdrant]"         # + qdrant-client (set VECTOR_BACKEND=qdrant)
-uv pip install -e ".[server]"         # + uvicorn + [mcp] (run knowledge-server, memory-server)
 uv sync --all-extras --group dev      # full dev environment
 ```
 
@@ -38,14 +35,14 @@ uv sync --all-extras --group dev      # full dev environment
 | `[rag]` | `pypdf`, `semantic-text-splitter`, `sqlite-vec` |
 | `[oidc]` | `PyJWT[crypto]` |
 | `[qdrant]` | `qdrant-client` (pair with `[rag]`) |
-| `[server]` | `uvicorn` + `[mcp]` |
 | `[std]` | `[rag]` + `[oidc]` (recommended full install) |
 
 Environment: copy `.env.example` to `.env`. Required: `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`. Optional: `CA_BUNDLE_PATH`, `VECTOR_BACKEND`, `SQLITE_PATH`, `QDRANT_*`, `MEMORY_PATH`, `OIDC_*`.
 
-Run an in-tree MCP server:
+The reference MCP servers (`knowledge-server`, `memory-server`) live in `examples/`. Run from inside `examples/`:
 
 ```sh
+cd examples && uv sync
 uv run knowledge-server --http --port 8082
 uv run memory-server --http --port 8083
 ```
@@ -95,19 +92,13 @@ Optional; gated by pip extras. Never imports from `core/__init__.py` — targets
 - `rag/` — `RAGStore`, `BaseStorageBackend` protocol; sqlite-vec and Qdrant backends
 - `guardrails.py` — composable input/output guard functions (zero new deps)
 
-### `llm_framework/tools/`
+### `examples/tools/`
 
-`@tool`-decorated callables shipped in the library. PENDING MOVE: most of these will move to `examples/` (see Open Work).
+`@tool`-decorated reference implementations shipped as runnable examples (filesystem, web_fetch, shell, memory, builtins). Import via `examples.tools.X` after `cd examples && uv sync`.
 
-- `filesystem.py` — `read_file`, `write_file`, `list_directory`, `file_info`; sandboxed to a root directory
-- `web_fetch.py` — `fetch_url` with SSRF protection
-- `shell.py` — `run_command`; allowlisted commands only
-- `memory.py` — `make_memory_tools(store)` factory
-- `builtins.py` — `add_numbers`, `multiply_numbers`, `subtract_numbers`, `divide_numbers`, `get_current_datetime`
+### `examples/mcp_servers/`
 
-### `llm_framework/mcp_servers/`
-
-`@mcp.tool()` servers; entry-point scripts. PENDING MOVE: will move to `examples/` (see Open Work).
+`@mcp.tool()` servers; entry-point scripts. Run from inside `examples/`:
 
 - `knowledge_server.py` — RAG-backed search (`uv run knowledge-server`)
 - `memory_server.py` — key-value store (`uv run memory-server`)
@@ -132,7 +123,7 @@ These are non-negotiable. See `.github/copilot-instructions.md` for the parallel
 
 **Optional deps.** For *third-party* optional packages, use the three-step sentinel pattern: (1) add `"pkg": "extra_name"` to `EXTRAS_MAP` in `llm_framework/_optional.py`, (2) declare a top-level `try: import pkg / except ImportError: pkg = None  # type: ignore[assignment]`, (3) call `_require("pkg", pkg)` at instantiation or first use (not at import time). Never use lazy imports inside function bodies — the sentinel pattern defers the failure to the call site with an install hint.
 
-**Consistency.** Any pattern introduced in one file of a group (`tools/`, `mcp_servers/`, `extensions/*/`) must be applied to all equivalent files in that group immediately — error surfacing, `__main__` CLI blocks, logging, `_MAX_CHARS` truncation, etc. Pareto principle: handle the 80% case cleanly.
+**Consistency.** Any pattern introduced in one file of a group (`examples/tools/`, `examples/mcp_servers/`, `extensions/*/`) must be applied to all equivalent files in that group immediately — error surfacing, `__main__` CLI blocks, logging, `_MAX_CHARS` truncation, etc. Pareto principle: handle the 80% case cleanly.
 
 ## Key Patterns
 
@@ -190,7 +181,7 @@ The global hook is opt-in. Observability is the right place for cross-cutting co
 
 Curated list of mistakes that have actually happened in this repo. Don't replicate.
 
-- **Don't ship `tools/builtins.py`** in the library. Demo functions belong in `examples/`.
+- **Demo functions live in `examples/`, not the library.** The library ships `@tool` decorators and infrastructure; concrete tool implementations are reference examples.
 - **Don't reach into another module's internals** to inject state (e.g. `Orchestrator` mutating a sub-agent's `on_event`). Use the public API or the observability hook.
 - **Don't use lazy imports** inside function bodies. Use the sentinel pattern.
 - **Don't double-count tokens.** Reasoning tokens are a *subset* of completion tokens, not additive.
@@ -203,9 +194,9 @@ Curated list of mistakes that have actually happened in this repo. Don't replica
 
 ### A tool
 
-1. Create or edit a file in `llm_framework/tools/` (or `examples/basics/` if it's a demo).
+1. Create or edit a file in `examples/tools/` (or `examples/basics/` if it's a demo).
 2. `from llm_framework.core import tool`; decorate with `@tool`.
-3. One-line docstring + `Args:` block per parameter. Re-export in `llm_framework/tools/__init__.py`.
+3. One-line docstring + `Args:` block per parameter. Re-export in `examples/tools/__init__.py`.
 
 ### An extension
 
@@ -215,12 +206,12 @@ Curated list of mistakes that have actually happened in this repo. Don't replica
 
 ### An MCP server (exposing tools to any MCP client)
 
-1. Create `llm_framework/mcp_servers/my_server.py`.
+1. Create `examples/mcp_servers/my_server.py`.
 2. Define a `lifespan` async context manager that yields shared clients/resources.
 3. Decorate tools with `@mcp.tool()`. Access shared state via `ctx: MCPContext` parameter.
 4. Add `argparse` CLI with `--http/--port` flags.
-5. Add an entry point in `pyproject.toml [project.scripts]`.
-6. Connect from agents with `MCPClient.stdio("uv", ["run", "my-server"])` or `MCPClient.http(url)`.
+5. Add an entry point in `examples/pyproject.toml [project.scripts]`.
+6. Connect from agents with `MCPClient.stdio("uv", ["run", "my-server"])` (run from inside `examples/`) or `MCPClient.http(url)`.
 
 ### An agent server (agent-as-a-tool)
 
@@ -277,9 +268,8 @@ Workflow reminders (not in the skill — always true):
 Items from the private review notes (`issues/REVIEW_*.md`, gitignored) that should be tackled before v1.0:
 
 1. **Decide on OIDC IdP coupling** — either commit to a specific IdP and rename, or remove the `v1` and `appid` fallbacks.
-2. **Move `tools/` and `mcp_servers/` to `examples/`** — capture the security patterns in `docs/patterns/security-tools.md` first.
-3. **Add CI for tests + lint + types** — currently only docs deploy runs on push.
-4. **`MemoryStore` concurrency** — JSON-as-a-DB has no multi-process safety. Document the limit or swap to SQLite.
-5. **`RAGStore` hardcoded home-dir sandbox** — make the root a constructor argument.
+2. **Add CI for tests + lint + types** — currently only docs deploy runs on push.
+3. **`MemoryStore` concurrency** — JSON-as-a-DB has no multi-process safety. Document the limit or swap to SQLite.
+4. **`RAGStore` hardcoded home-dir sandbox** — make the root a constructor argument.
 
 For the full list, see the private review notes (in `issues/REVIEW_*.md`, gitignored).

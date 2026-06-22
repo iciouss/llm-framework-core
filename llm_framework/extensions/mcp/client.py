@@ -62,7 +62,7 @@ class MCPClient:
 
         Args:
             command: Executable to launch (e.g. `"uv"`).
-            args: Command-line arguments (e.g. `["run", "memory-server"]`).
+            args: Command-line arguments (e.g. `["run", "python", "examples/mcp_servers/memory_server.py"]`).
             env: Optional environment variables merged into the subprocess environment.
             timeout: Per-call timeout in seconds (default 60). Subprocess is killed on context exit.
             on_mcp: Optional observability callback receiving `MCPEvent` for each tool call.

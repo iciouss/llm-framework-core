@@ -15,32 +15,34 @@ await store.save("user_name", "Alice")
 prompt = f"The user's name is: {store.load('user_name')}"
 ```
 
-**Layer 2 — `tools/` (local @tool, in-process)**
+**Layer 2 — `examples/tools/` (local @tool, in-process)**
 Exposes the class methods as `@tool`-decorated functions so the agent can call them autonomously during its ReAct loop. Runs in the same process — zero network overhead. Use this when one agent needs the capability within a single script.
 
 ```python
+from examples.tools.memory import make_memory_tools
+
 store = MemoryStore(path="memory.json")
 agent = Agent(client, tools=make_memory_tools(store))
 # the agent can now call save_memory / recall_memory / etc. as tool calls
 ```
 
-**Layer 3 — `mcp_servers/` (@mcp.tool, out-of-process)**
+**Layer 3 — `examples/mcp_servers/` (@mcp.tool, out-of-process)**
 Wraps the same capability as an MCP server. Run it once; every agent that connects shares the same store. Survives beyond any single script run. Two modes:
 
 - **stdio** — spawned as a subprocess for the duration of your script, then killed. Isolated to that session.
 - **HTTP** — persistent, independent process. Any number of agents or scripts hitting the same endpoint share the same state.
 
-Use `mcp_servers/` for generic internal servers. For external API integrations with optional dependencies, add a new module under `extensions/` or a standalone MCPServer.
+Use `examples/mcp_servers/` for generic internal servers. For external API integrations with optional dependencies, add a new module under `extensions/` or a standalone MCPServer.
 
 ```sh
-uv run memory-server --http --port 8083 --path memory.json
+cd examples && uv run memory-server --http --port 8083 --path memory.json
 ```
 
-Rule: one agent, one script, one process → `tools/`. Persistence across scripts, shared state across agents, or access from outside Python → `mcp_servers/`.
+Rule: one agent, one script, one process → `examples/tools/`. Persistence across scripts, shared state across agents, or access from outside Python → `examples/mcp_servers/`.
 
 ## tools/ vs mcp_servers/ — Quick Reference
 
-| | `tools/` | `mcp_servers/` stdio | `mcp_servers/` HTTP |
+| | `examples/tools/` | `examples/mcp_servers/` stdio | `examples/mcp_servers/` HTTP |
 |---|---|---|---|
 | Decorator | `@tool` | `@mcp.tool` | `@mcp.tool` |
 | Process | same as agent | subprocess, auto-killed | independent, persistent |

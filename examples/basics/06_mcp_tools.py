@@ -17,8 +17,9 @@ from llm_framework.extensions import MCPClient, MCPManager
 from llm_framework.observability import set_hook
 
 ROOT = Path(__file__).parent.parent.parent
-MEMORY_SERVER = str(ROOT / "llm_framework" / "mcp_servers" / "memory_server.py")
-KNOWLEDGE_SERVER = str(ROOT / "llm_framework" / "mcp_servers" / "knowledge_server.py")
+EXAMPLES = Path(__file__).parent.parent
+MEMORY_SERVER = str(EXAMPLES / "mcp_servers" / "memory_server.py")
+KNOWLEDGE_SERVER = str(EXAMPLES / "mcp_servers" / "knowledge_server.py")
 
 
 # Show which server each tool call came from by matching tool names.

@@ -15,10 +15,7 @@ import json
 import sys
 from pathlib import Path
 
-from llm_framework.core import Agent, HistoryBuffer, LLMClient
-from llm_framework.extensions import MCPClient, MCPManager
-from llm_framework.extensions.guardrails import block_keywords, llm_guard, strip_pii
-from llm_framework.tools import (
+from examples.tools import (
     fetch_url,
     file_info,
     get_current_datetime,
@@ -26,6 +23,9 @@ from llm_framework.tools import (
     read_file,
     write_file,
 )
+from llm_framework.core import Agent, HistoryBuffer, LLMClient
+from llm_framework.extensions import MCPClient, MCPManager
+from llm_framework.extensions.guardrails import block_keywords, llm_guard, strip_pii
 
 # --------------------------------------------------------------------------- #
 # ANSI codes — no external deps
@@ -45,8 +45,9 @@ CYAN = "\033[36m"
 APPROVAL_TOOLS = {"write_file", "run_command", "ingest_file"}
 
 _ROOT = Path(__file__).parent.parent.parent
-_MEMORY_SERVER = str(_ROOT / "llm_framework" / "mcp_servers" / "memory_server.py")
-_KNOWLEDGE_SERVER = str(_ROOT / "llm_framework" / "mcp_servers" / "knowledge_server.py")
+_EXAMPLES = Path(__file__).parent.parent
+_MEMORY_SERVER = str(_EXAMPLES / "mcp_servers" / "memory_server.py")
+_KNOWLEDGE_SERVER = str(_EXAMPLES / "mcp_servers" / "knowledge_server.py")
 
 SYSTEM_PROMPT = (
     "You are a helpful general-purpose assistant. "

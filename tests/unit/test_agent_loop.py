@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 import pprint
 
-import pytest
-
 from llm_framework.core import Agent
 from llm_framework.core.tools import tool
 

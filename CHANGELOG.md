@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The internal `AgentEvent` TypedDict was removed from `core/agent.py`. The agent loop now constructs `AgentStepEvent` directly via a private helper, eliminating the dual event representation.
 - `pyproject.toml` now declares `classifiers`, `keywords`, and a `[project.urls]` block (Homepage, Documentation, Issues) so the package renders correctly on PyPI.
 
+### Removed
+- `llm_framework.tools.*` and `llm_framework.mcp_servers.*`. The reference tool implementations and MCP-server entry-point scripts now live in `examples/tools/` and `examples/mcp_servers/`. The `knowledge-server` and `memory-server` console scripts moved to the `examples` project — run them via `cd examples && uv run <server>`. The `[server]` extra was removed (`uvicorn` is no longer a library dependency; it ships transitively via `examples/`).
+
 
 ### Fixed
 - Token accounting no longer double-counts `reasoning_tokens` as a separate billable quantity. Consumers reading `prompt_tokens + completion_tokens + reasoning_tokens` were being charged twice for reasoning tokens; the new `total_billable_tokens` field gives the correct sum.

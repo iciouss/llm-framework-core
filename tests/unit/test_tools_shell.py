@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llm_framework.tools.shell import _safe_args, _safe_cwd, run_command
+from examples.tools.shell import _safe_args, _safe_cwd, run_command
 
 
 def test_disallowed_command_raises():

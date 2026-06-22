@@ -1,8 +1,8 @@
 import pytest
 
+from examples.tools.builtins import add_numbers
 from llm_framework.core import Agent, LLMClient
 from llm_framework.extensions.guardrails import llm_guard, strip_pii
-from llm_framework.tools.calculator import add_numbers
 
 pytestmark = pytest.mark.integration
 

@@ -25,7 +25,7 @@ The agent can decide when to call these tools as part of its reasoning loop.
 ```python
 import asyncio
 from llm_framework.core import LLMClient, Agent
-from llm_framework.tools.filesystem import list_directory, read_file
+from examples.tools.filesystem import list_directory, read_file
 
 async def main():
     async with LLMClient.from_env() as client:

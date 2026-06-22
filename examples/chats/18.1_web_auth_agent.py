@@ -44,14 +44,7 @@ from fastapi import (
 )
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from llm_framework.core import Agent, HistoryBuffer, LLMClient
-from llm_framework.extensions.auth import (
-    AuthContext,
-    AuthGate,
-    MemoryPolicyBackend,
-)
-from llm_framework.extensions.guardrails import block_keywords, llm_guard, strip_pii
-from llm_framework.tools import (
+from examples.tools import (
     fetch_url,
     file_info,
     get_current_datetime,
@@ -59,6 +52,13 @@ from llm_framework.tools import (
     read_file,
     write_file,
 )
+from llm_framework.core import Agent, HistoryBuffer, LLMClient
+from llm_framework.extensions.auth import (
+    AuthContext,
+    AuthGate,
+    MemoryPolicyBackend,
+)
+from llm_framework.extensions.guardrails import block_keywords, llm_guard, strip_pii
 
 # --------------------------------------------------------------------------- #
 # Users, policy, gate

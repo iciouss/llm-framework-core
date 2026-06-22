@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "llm-framework-examples"
 version = "0.0.0"
@@ -8,6 +12,13 @@ dependencies = [
     "websockets>=16.0",
     "llm-framework[std]",
 ]
+
+[project.scripts]
+knowledge-server = "mcp_servers.knowledge_server:main"
+memory-server = "mcp_servers.memory_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tools", "mcp_servers", "chats", "advanced", "basics", "specialized_agents"]
 
 [tool.uv.sources]
 llm-framework = { path = ".." }

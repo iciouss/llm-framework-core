@@ -21,8 +21,7 @@ from llm_framework.extensions import MCPClient, MCPManager
 from llm_framework.observability import set_hook
 
 KNOWLEDGE_SERVER = str(
-    Path(__file__).parent.parent.parent
-    / "llm_framework"
+    Path(__file__).parent.parent
     / "mcp_servers"
     / "knowledge_server.py"
 )

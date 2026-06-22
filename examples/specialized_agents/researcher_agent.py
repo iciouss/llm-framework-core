@@ -4,9 +4,9 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from examples.tools.web_fetch import fetch_url
 from llm_framework.core import Agent, LLMClient
 from llm_framework.extensions.mcp import MCPContext, MCPServer
-from llm_framework.tools.web_fetch import fetch_url
 
 _MAX_CHARS = 8_000
 

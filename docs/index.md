@@ -12,7 +12,7 @@ Minimal Python library for building LLM-powered agents with a low dependency foo
 
 * **[Installation](getting-started/installation.md)**: Learn how to install the core library and its optional extensions.
 * **[Quickstart](getting-started/quickstart.md)**: Build your first agent in less than 15 lines of code.
-* **[Patterns](patterns.md)**: Architecture guidance for choosing `tools/` or `mcp_servers/`.
+* **[Patterns](patterns.md)**: Architecture guidance for choosing `examples/tools/` or `examples/mcp_servers/`.
 
 ---
 
@@ -20,5 +20,6 @@ Minimal Python library for building LLM-powered agents with a low dependency foo
 
 - **[Core](api/core.md)** — `LLMClient`, `Agent`, `Orchestrator`, `HistoryBuffer`, `@tool`, `@cached_tool`
 - **[Extensions](api/extensions.md)** — `MCPClient`, `MCPManager`, `MCPServer`, `MCPContext`, `MemoryStore`, `RAGStore`, auth gate, `OIDCAuthProvider`, guardrails, vector stores
-- **[Tools](api/tools.md)** — Filesystem, shell, web fetch, calculator, clock, memory
 - **[Configuration](api/config.md)** — `Config` dataclass
+
+Reference tool and MCP-server implementations live under [`examples/`](https://github.com/iciouss/llm-framework-core/tree/main/examples).

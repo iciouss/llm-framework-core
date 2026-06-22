@@ -45,9 +45,9 @@ Each extra is an explicit, auditable addition to your supply chain.
 ```text
 core/           — httpx only; ReAct agent loop, @tool schema gen, LLM client, orchestrator
 extensions/     — optional: MCP client, RAG, auth, memory store, guardrails
-tools/          — @tool-decorated callables; run in-process alongside the agent
-mcp_servers/    — @mcp.tool servers; run as separate processes via stdio or HTTP
 ```
+
+Reference tool and MCP-server implementations live in `examples/tools/` and `examples/mcp_servers/` — see [`examples/`](examples/) for runnable demos.
 
 ### Three layers for every capability
 
@@ -63,24 +63,26 @@ await store.save("user", "Alice")
 system = f"User name: {store.load('user')}"
 ```
 
-**`tools/` — local `@tool`, in-process.**
+**`examples/tools/` — local `@tool`, in-process.**
 Exposes the class as `@tool` functions so the agent can call them autonomously mid-reasoning. Zero network overhead. Use when one agent needs the capability within a single script.
 
 ```python
+from examples.tools.memory import make_memory_tools
+
 store = MemoryStore(path="memory.json")
 agent = Agent(client, tools=make_memory_tools(store))
 ```
 
-**`mcp_servers/` or `tools/` — MCPServer, out-of-process.**
+**`examples/mcp_servers/` — MCPServer, out-of-process.**
 Run once; every connecting agent shares the same state. Two modes:
 - **stdio** — subprocess, lives for the duration of your script
 - **HTTP** — persistent process; any number of agents or scripts share the same endpoint
 
 ```sh
-uv run memory-server --http --port 8083 --path memory.json
+cd examples && uv run memory-server --http --port 8083 --path memory.json
 ```
 
-Rule of thumb: one agent, one script → use `tools/`. Shared state or persistence across scripts → use `mcp_servers/`.
+Rule of thumb: one agent, one script → use `examples/tools/`. Shared state or persistence across scripts → use `examples/mcp_servers/`.
 
 ## Configuration
 
@@ -107,7 +109,7 @@ The framework reads configuration directly from environment variables via `LLMCl
 
 ```python
 from llm_framework.core import LLMClient, Agent
-from llm_framework.tools.filesystem import list_directory, read_file
+from examples.tools.filesystem import list_directory, read_file
 
 async with LLMClient.from_env() as client:
     agent = Agent(
@@ -394,7 +396,11 @@ Writes internal ReAct traces to `researcher.log` in the working directory.
 
 ## MCP Tools Servers
 
-The `llm_framework/mcp_servers/` folder contains generic MCPServer instances (no external API dependency). Run them as separate processes when you need shared or persistent state across multiple agents or scripts.
+The `examples/mcp_servers/` folder contains generic MCPServer instances (no external API dependency). Run them as separate processes when you need shared or persistent state across multiple agents or scripts. Run from inside `examples/`:
+
+```bash
+cd examples && uv sync
+```
 
 **Knowledge Server** (RAG: search_notes + ingest_file)
 Requires `LLM_BASE_URL`, `LLM_API_KEY`, `EMBED_MODEL`. Optional: `VECTOR_BACKEND`, `SQLITE_PATH`, `VECTOR_SIZE`, `QDRANT_*`.
@@ -414,21 +420,16 @@ uv run memory-server --http --port 8083   # HTTP mode
 
 ## Tests
 
-Tests are standalone integration scripts (not pytest). They read credentials directly from `.env` via `LLMClient.from_env()`.
+Tests are runnable with `pytest` — the `tests/unit/` suite covers the library and example tools; `tests/integration/` requires a live LLM endpoint and is opt-in.
 
 ```bash
-python tests/core/test_guardrails.py
-python tests/core/test_orchestrator.py
-python tests/core/test_structured_output.py
-python tests/core/test_history.py      # no LLM needed
-python tests/core/test_cached_tool.py  # no LLM needed
-python tests/core/test_memory.py       # spawns memory-server as subprocess automatically
-python tests/core/test_rag.py          # spawns knowledge-server; needs qdrant + embeddings endpoint
+uv run pytest tests/unit tests/test_packaging.py -v     # no LLM required
+uv run pytest tests/integration -v -m integration       # live LLM endpoint required
 ```
 
 ## Adding features
 
-See [AGENTS.md](AGENTS.md) for architecture conventions, coding rules, and step-by-step recipes for adding tools, integrations, and vector backends.
+See [`CLAUDE.md`](CLAUDE.md) for architecture conventions, coding rules, and step-by-step recipes for adding tools, integrations, and vector backends.
 
 ## License
 

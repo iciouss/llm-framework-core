@@ -1,6 +1,6 @@
 import pytest
 
-from llm_framework.tools.builtins import (
+from examples.tools.builtins import (
     add_numbers,
     divide_numbers,
     multiply_numbers,

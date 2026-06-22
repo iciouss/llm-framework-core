@@ -10,6 +10,7 @@ New here: AuthGate, MemoryPolicyBackend, StaticAuthProvider, AuthContext,
 
 import asyncio
 
+from examples.tools import add_numbers, fetch_url, get_current_datetime, write_file
 from llm_framework.core import Agent, LLMClient
 from llm_framework.extensions.auth import (
     AuthContext,
@@ -18,7 +19,6 @@ from llm_framework.extensions.auth import (
     StaticAuthProvider,
 )
 from llm_framework.observability import set_hook
-from llm_framework.tools import add_numbers, fetch_url, get_current_datetime, write_file
 
 POLICY = {
     "roles": {

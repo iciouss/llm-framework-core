@@ -1,5 +1,5 @@
+from examples.tools.memory import make_memory_tools
 from llm_framework.extensions.memory import MemoryStore
-from llm_framework.tools.memory import make_memory_tools
 
 
 def _store():
