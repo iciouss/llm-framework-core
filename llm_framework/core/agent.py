@@ -252,18 +252,30 @@ class Agent:
 
     async def _apply_input_guards(self, prompt: str) -> str:
         for guard in self.input_guards:
-            result = guard(prompt)
-            if asyncio.iscoroutine(result):
-                result = await result
-            prompt = result
+            name = getattr(guard, "__name__", type(guard).__name__)
+            try:
+                result = guard(prompt)
+                if asyncio.iscoroutine(result):
+                    result = await result
+                prompt = result
+                await self._emit(self._step_event("guardrail", {"scope": "input", "guard": name, "verdict": "pass"}))
+            except Exception as exc:
+                await self._emit(self._step_event("guardrail", {"scope": "input", "guard": name, "verdict": "block", "reason": str(exc)}))
+                raise
         return prompt
 
     async def _apply_output_guards(self, content: str) -> str:
         for guard in self.output_guards:
-            result = guard(content)
-            if asyncio.iscoroutine(result):
-                result = await result
-            content = result
+            name = getattr(guard, "__name__", type(guard).__name__)
+            try:
+                result = guard(content)
+                if asyncio.iscoroutine(result):
+                    result = await result
+                content = result
+                await self._emit(self._step_event("guardrail", {"scope": "output", "guard": name, "verdict": "pass"}))
+            except Exception as exc:
+                await self._emit(self._step_event("guardrail", {"scope": "output", "guard": name, "verdict": "block", "reason": str(exc)}))
+                raise
         return content
 
     async def _run_loop(
