@@ -207,10 +207,34 @@ class OIDCAuthProvider:
                 algorithms=["RS256", "ES256", "RS384", "ES384"],
                 audience=self._client_id,
             )
-            return claims
         except jwt.InvalidTokenError as exc:
             log.warning("id_token validation failed: %s", exc)
             return None
+
+        log.info("OIDC claims for %s: roles=%s", claims.get("email") or claims.get("sub"), claims.get(self._roles_claim))
+
+        # Azure puts app role assignments in the access_token, not the id_token.
+        # If the id_token has no roles claim, merge it from the access_token.
+        if not claims.get(self._roles_claim):
+            access_token = tokens.get("access_token")
+            if access_token:
+                try:
+                    at_claims = jwt.decode(
+                        access_token,
+                        options={"verify_signature": False},
+                        algorithms=["RS256", "ES256", "RS384", "ES384"],
+                    )
+                    at_roles = at_claims.get(self._roles_claim)
+                    if at_roles:
+                        log.debug(
+                            "roles claim absent from id_token; merging from access_token: %s",
+                            at_roles,
+                        )
+                        claims[self._roles_claim] = at_roles
+                except jwt.DecodeError as exc:
+                    log.debug("access_token decode skipped: %s", exc)
+
+        return claims
 
     def claims_to_context(
         self,
