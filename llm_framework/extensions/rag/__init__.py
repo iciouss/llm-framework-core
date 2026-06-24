@@ -90,6 +90,7 @@ class RAGStore:
         embed_batch_size: int = 64,
         _owns_client: bool = False,
         on_rag: Any | None = None,
+        allowed_base: str | Path | None = None,
     ):
         """
         Args:
@@ -98,6 +99,9 @@ class RAGStore:
             default_max_tokens: Approximate token limit per chunk when ingesting files (default 300).
             embed_batch_size: Maximum strings per embedding API call; prevents exceeding provider limits (default 64).
             on_rag: Optional observability callback receiving `RAGEvent` on ingest/search.
+            allowed_base: Root directory that `ingest_file` paths must reside under.
+                Defaults to the current user's home directory. Override when running in
+                containers where data lives outside the home directory (e.g. ``/app/data``).
         """
         self.llm = llm_client
         self.storage = storage_backend
@@ -105,6 +109,7 @@ class RAGStore:
         self._embed_batch_size = embed_batch_size
         self._owns_client = _owns_client
         self.on_rag = on_rag
+        self._allowed_base = Path(allowed_base).resolve() if allowed_base is not None else Path.home()
         _require("semantic_text_splitter", MarkdownSplitter)
 
     @classmethod
@@ -136,12 +141,12 @@ class RAGStore:
         "Convert, chunk, embed, and store a file; returns the number of chunks ingested."
         path_obj = Path(file_path)
 
-        # sandbox to home directory so library callers can't read arbitrary filesystem paths
+        # sandbox to allowed_base so library callers can't read arbitrary filesystem paths
         try:
-            path_obj.resolve().relative_to(Path.home())
+            path_obj.resolve().relative_to(self._allowed_base)
         except ValueError:
             raise PermissionError(
-                f"Path '{path_obj.resolve()}' is outside the home directory sandbox"
+                f"Path '{path_obj.resolve()}' is outside the allowed base directory '{self._allowed_base}'"
             ) from None
 
         if not path_obj.exists():
