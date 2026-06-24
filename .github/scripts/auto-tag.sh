@@ -5,6 +5,10 @@
 # Tag format: vX.Y.Z on main, derived from the previous v* tag plus the
 # conventional-commit type of new commits since.
 #
+# Non-main branches are NOT tagged: hatch-vcs already derives unique dev
+# versions (vX.Y.Z.devN+gHASH) from the commit distance to the latest tag, so a
+# per-push tag would only add noise. The workflow only runs on main anyway.
+#
 # Bump precedence (highest first):
 #   1. Manual footer in any new commit body:
 #        [release: major] [release: minor] [release: patch]
@@ -26,8 +30,11 @@ if [ "$ref_name" != "main" ]; then
   exit 0
 fi
 
-# Most recent ancestor tag matching v*. Falls back to 0.0.0 if no tag exists yet.
-latest=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null | sed 's/^v//' || true)
+# Highest vX.Y.Z tag across all fetched refs (not just ancestors of HEAD).
+# Using sort -V rather than git-describe so that tags created via the GitHub
+# API that happen not to be strict ancestors of HEAD are still considered.
+# Falls back to 0.0.0 if no matching tag exists yet.
+latest=$(git tag -l 'v*' | grep -oE '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 | sed 's/^v//' || true)
 if [ -z "$latest" ]; then latest="0.0.0"; fi
 
 # All commit subjects + bodies since the previous tag. `%b` is the body, the
